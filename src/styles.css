@@ -766,6 +766,21 @@ main {
     0 14px 28px rgba(22, 22, 22, 0.16);
 }
 
+.chart-note {
+  position: absolute;
+  right: calc(24px + 2.2%);
+  bottom: 4px;
+  left: calc(24px + 5.9%);
+  z-index: 4;
+  margin: 0;
+  color: var(--soft-ink);
+  font-size: 11px;
+  font-style: italic;
+  line-height: 1;
+  pointer-events: none;
+  text-align: center;
+}
+
 .zoom-readout {
   display: flex;
   gap: 8px;
