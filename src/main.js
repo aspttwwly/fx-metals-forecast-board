@@ -1,3 +1,9 @@
+function esc(str) {
+  const el = document.createElement("span");
+  el.textContent = str;
+  return el.innerHTML;
+}
+
 const manifestUrl = "/data/manifest.json";
 const visitEndpoint = "/api/visits";
 const localVisitKey = "fxForecastBoard.visitCount.v1";
@@ -316,10 +322,10 @@ function renderInstrumentRail() {
   els.instruments.innerHTML = symbols
     .map(
       (item) => `
-        <button class="instrument-button" type="button" data-symbol="${item.symbol}" aria-label="${item.name}" aria-pressed="false">
+        <button class="instrument-button" type="button" data-symbol="${esc(item.symbol)}" aria-label="${esc(item.name)}" aria-pressed="false">
           <span class="shape" aria-hidden="true"></span>
-          <strong>${item.symbol}</strong>
-          <small>${item.group} · ${directionGlyph(item.direction)}</small>
+          <strong>${esc(item.symbol)}</strong>
+          <small>${esc(item.group)} · ${directionGlyph(item.direction)}</small>
         </button>
       `,
     )
@@ -616,9 +622,9 @@ function wireTooltip(series, scale) {
     }, { point: series[0], distance: Infinity }).point;
 
     els.tooltip.innerHTML = `
-      <strong>${nearest.date}</strong>
-      实际 ${formatNumber(nearest.actual)}<br />
-      预测 ${formatNumber(nearest.forecast)}
+      <strong>${esc(nearest.date)}</strong>
+      实际 ${esc(formatNumber(nearest.actual))}<br />
+      预测 ${esc(formatNumber(nearest.forecast))}
     `;
     els.tooltip.hidden = false;
     els.tooltip.style.left = `${Math.min(event.clientX - rect.left + 16, rect.width - 180)}px`;
@@ -640,11 +646,11 @@ function renderTable(data) {
     .map(
       (point) => `
         <tr>
-          <td>${point.date}</td>
-          <td>${formatNumber(point.actual)}</td>
-          <td>${formatNumber(point.forecast)}</td>
-          <td>${formatNumber(point.lower)}</td>
-          <td>${formatNumber(point.upper)}</td>
+          <td>${esc(point.date)}</td>
+          <td>${esc(formatNumber(point.actual))}</td>
+          <td>${esc(formatNumber(point.forecast))}</td>
+          <td>${esc(formatNumber(point.lower))}</td>
+          <td>${esc(formatNumber(point.upper))}</td>
         </tr>
       `,
     )
@@ -760,5 +766,12 @@ async function init() {
 }
 
 init().catch((error) => {
-  document.body.innerHTML = `<main class="load-error"><h1>数据加载失败</h1><p>${error.message}</p></main>`;
+  const main = document.createElement("main");
+  main.className = "load-error";
+  const h1 = document.createElement("h1");
+  h1.textContent = "数据加载失败";
+  const p = document.createElement("p");
+  p.textContent = error.message;
+  main.append(h1, p);
+  document.body.replaceChildren(main);
 });

@@ -98,7 +98,8 @@ async function handleVisitRequest(req, res) {
     try {
       const body = await readRequestBody(req);
       const payload = body ? JSON.parse(body) : {};
-      symbol = typeof payload.symbol === "string" ? payload.symbol : null;
+      const raw = typeof payload.symbol === "string" ? payload.symbol : null;
+      symbol = raw && /^[A-Z0-9]{3,12}$/.test(raw) ? raw : null;
     } catch {
       symbol = null;
     }

@@ -70,18 +70,32 @@ async function handleVisits(request, env) {
   });
 }
 
+const securityHeaders = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+};
+
+function withSecurityHeaders(response) {
+  const patched = new Response(response.body, response);
+  for (const [key, value] of Object.entries(securityHeaders)) {
+    patched.headers.set(key, value);
+  }
+  return patched;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
     if (url.pathname === "/api/visits") {
-      return handleVisits(request, env);
+      return withSecurityHeaders(await handleVisits(request, env));
     }
 
     if (url.pathname.startsWith("/api/")) {
-      return json({ error: "Not found" }, 404);
+      return withSecurityHeaders(json({ error: "Not found" }, 404));
     }
 
-    return env.ASSETS.fetch(request);
+    return withSecurityHeaders(await env.ASSETS.fetch(request));
   },
 };
