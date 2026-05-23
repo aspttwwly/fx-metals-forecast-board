@@ -1,0 +1,6 @@
+node_modules/
+dist/
+server.out.log
+server.err.log
+screenshots/
+upload file/

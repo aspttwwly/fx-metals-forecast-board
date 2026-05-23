@@ -1,0 +1,11 @@
+{
+  "name": "fx-metals-forecast-board",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node server.mjs",
+    "convert:data": "python scripts/convert-data.py"
+  }
+}

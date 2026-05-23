@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="汇率与贵金属预测观察：周频预测、历史收盘、下载文件。" />
+    <title>汇率与贵金属预测观察</title>
+    <link rel="stylesheet" href="/src/styles.css?v=20260523-shortchart5" />
+  </head>
+  <body>
+    <main>
+      <section class="masthead" aria-labelledby="page-title">
+        <p class="eyebrow">/ WEEKLY FORECAST OBSERVATORY</p>
+        <h1 id="page-title">汇率与贵金属<br /><span>预测观察</span></h1>
+        <div class="masthead-meta">
+          <span>最新更新时间 <strong data-meta="updated">--</strong></span>
+          <span>数据周期 <strong>周频</strong></span>
+          <span>发布形态 <strong>静态 JSON</strong></span>
+        </div>
+      </section>
+
+      <section class="workspace" id="data">
+        <section class="chart-stage" aria-labelledby="instrument-title">
+          <div class="stage-grid" aria-hidden="true"></div>
+          <div class="stage-glass">
+            <div class="stage-head">
+              <div>
+                <p class="kicker">/ SELECTED INSTRUMENT</p>
+                <h2 id="instrument-title" data-field="symbol">--</h2>
+              </div>
+              <div class="stage-actions">
+                <button type="button" class="icon-button" title="切换到上一个品种" data-prev aria-label="上一个品种">
+                  <span aria-hidden="true">←</span>
+                </button>
+                <button type="button" class="icon-button" title="切换到下一个品种" data-next aria-label="下一个品种">
+                  <span aria-hidden="true">→</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="metric-strip" aria-label="核心指标">
+              <article>
+                <span>最新收盘</span>
+                <strong data-field="latestActual">--</strong>
+              </article>
+              <article>
+                <span>下一期预测</span>
+                <strong data-field="nextForecast">--</strong>
+              </article>
+              <article>
+                <span>预测方向</span>
+                <strong data-field="direction">--</strong>
+              </article>
+              <article>
+                <span>偏离值</span>
+                <strong data-field="deviation">--</strong>
+              </article>
+            </div>
+
+            <div class="chart-wrap">
+              <div class="chart-legend" aria-label="图表示意">
+                <span><i class="legend-line legend-actual"></i>实际值</span>
+                <span><i class="legend-line legend-history"></i>历史预测</span>
+                <span><i class="legend-line legend-future"></i>未来预测</span>
+                <span><i class="legend-band"></i>预测范围</span>
+              </div>
+              <svg data-chart role="img" aria-label="历史收盘价与模型预测图"></svg>
+              <div class="tooltip" data-tooltip hidden></div>
+
+              <div class="zoom-panel" data-zoom-panel>
+                <div class="zoom-readout">
+                  <span data-zoom-from>--</span>
+                  <span>/ VIEW WINDOW</span>
+                  <span data-zoom-to>--</span>
+                </div>
+                <div class="range-stack">
+                  <div class="zoom-track" data-zoom-window></div>
+                  <input type="range" min="0" max="100" value="0" step="1" data-zoom-start aria-label="缩放起点" />
+                  <input type="range" min="0" max="100" value="100" step="1" data-zoom-end aria-label="缩放终点" />
+                </div>
+                <button type="button" class="zoom-reset" data-zoom-reset aria-label="重置缩放">↔</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="instrument-rail market-dock" aria-label="品种快速预览">
+          <div class="rail-head">
+            <span class="square hatched"></span>
+            <h2>品种预览</h2>
+            <span class="dock-state" data-dock-state>悬停预览 / 点击固定</span>
+          </div>
+          <div class="instrument-groups" data-instruments></div>
+        </aside>
+
+        <aside class="summary-panel">
+          <div class="rail-head">
+            <span class="square hatched"></span>
+            <h2>摘要</h2>
+          </div>
+          <dl class="summary-list">
+            <div>
+              <dt>最近实际点</dt>
+              <dd data-summary="actual">--</dd>
+            </div>
+            <div>
+              <dt>最近预测点</dt>
+              <dd data-summary="forecast">--</dd>
+            </div>
+            <div>
+              <dt>模型版本</dt>
+              <dd data-summary="version">Prophet annealing v1</dd>
+            </div>
+            <div>
+              <dt>生成日期</dt>
+              <dd data-summary="generated">--</dd>
+            </div>
+          </dl>
+          <div class="direction-card" data-direction-card>
+            <span class="triangle"></span>
+            <p data-summary="note">--</p>
+          </div>
+        </aside>
+      </section>
+
+      <section class="below-grid">
+        <div class="table-panel">
+          <div class="section-title">
+            <span class="square hatched"></span>
+            <h2>最近数据</h2>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>日期</th>
+                  <th>实际收盘</th>
+                  <th>模型预测</th>
+                  <th>区间下沿</th>
+                  <th>区间上沿</th>
+                </tr>
+              </thead>
+              <tbody data-table></tbody>
+            </table>
+          </div>
+        </div>
+
+        <aside class="download-panel" id="downloads">
+          <div class="section-title">
+            <span class="square black"></span>
+            <h2>下载</h2>
+          </div>
+          <a class="download-link" data-download="forecast" href="#">预测文件</a>
+          <a class="download-link" data-download="history" href="#">历史收盘文件</a>
+          <div class="analytics-note" id="analytics">
+            <span>/ ANALYTICS</span>
+            <p>Cloudflare Web Analytics token 留空；部署后在 `index.html` 底部填入官方 beacon 即可。</p>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <dialog class="risk-dialog" data-risk-dialog>
+      <form method="dialog">
+        <div class="dialog-head">
+          <h2>风险提示</h2>
+          <button class="icon-button" value="close" aria-label="关闭">×</button>
+        </div>
+        <p>
+          本页面展示本地模型生成的研究观察数据，不构成投资建议、交易指令或收益承诺。
+          汇率与贵金属价格受宏观、流动性和突发事件影响，实际结果可能与预测显著偏离。
+        </p>
+      </form>
+    </dialog>
+
+    <script type="module" src="/src/main.js?v=20260523-shortchart5"></script>
+    <!-- Cloudflare Web Analytics: deploy 后将官方 beacon 脚本放在这里。 -->
+  </body>
+</html>
