@@ -2,9 +2,18 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "fx-metals-forecast-board",
   "compatibility_date": "2026-05-23",
+  "main": "./worker/index.js",
   "workers_dev": true,
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"],
     "not_found_handling": "single-page-application"
-  }
+  },
+  "kv_namespaces": [
+    {
+      "binding": "VISIT_COUNTER",
+      "id": "8a312d6f6e7147ef98196085c11e5c12"
+    }
+  ]
 }

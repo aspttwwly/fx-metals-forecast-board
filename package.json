@@ -6,6 +6,8 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "dev": "node server.mjs",
+    "deploy": "npm run build && npx wrangler deploy",
+    "cf:dev": "npm run build && npx wrangler dev",
     "convert:data": "python scripts/convert-data.py"
   }
 }
