@@ -3,6 +3,10 @@ setlocal
 
 cd /d "%~dp0"
 
+set "PYTHON_EXE=%USERPROFILE%\.conda\envs\quant_stock\python.exe"
+if not exist "%PYTHON_EXE%" set "PYTHON_EXE=C:\ProgramData\miniconda3\python.exe"
+if not exist "%PYTHON_EXE%" set "PYTHON_EXE=python"
+
 echo.
 echo ========================================
 echo FX Metals Forecast Data Update
@@ -10,7 +14,7 @@ echo ========================================
 echo.
 
 echo [1/5] Converting upload file Excel files...
-call npm run convert:data
+"%PYTHON_EXE%" scripts\convert-data.py
 if errorlevel 1 goto fail
 
 echo.
@@ -22,6 +26,13 @@ if "%CHANGE_SIZE%"=="0" (
   del "%TEMP%\fx_metals_data_changes.txt" >nul 2>nul
   echo.
   echo No public/data changes found. Nothing to commit.
+  echo Checking for pending GitHub push...
+  git push
+  if errorlevel 1 goto fail
+  echo.
+  echo ========================================
+  echo Done. Cloudflare will deploy automatically if anything was pushed.
+  echo ========================================
   echo.
   pause
   exit /b 0
