@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="汇率与贵金属预测观察：周频预测、历史收盘、下载文件。" />
     <title>汇率与贵金属预测观察</title>
-    <link rel="stylesheet" href="/src/styles.css?v=20260523-notice" />
+    <link rel="stylesheet" href="/src/styles.css?v=20260523-monitor" />
   </head>
   <body>
     <main>
@@ -16,6 +16,7 @@
           <span>最新更新时间 <strong data-meta="updated">--</strong></span>
           <span>数据周期 <strong>周频</strong></span>
           <span>发布形态 <strong>静态 JSON</strong></span>
+          <span>访问量 <strong class="visit-counter" data-visit-count>--</strong></span>
         </div>
       </section>
 
@@ -66,6 +67,31 @@
               </div>
               <svg data-chart role="img" aria-label="历史收盘价与模型预测图"></svg>
               <div class="tooltip" data-tooltip hidden></div>
+              <div class="quality-panel" data-quality-panel aria-label="预测可信度指标">
+                <div class="quality-head">
+                  <span>/ 信度监控</span>
+                  <strong data-quality="grade">--</strong>
+                </div>
+                <dl class="quality-metrics">
+                  <div>
+                    <dt>MAPE</dt>
+                    <dd data-quality="mape">--</dd>
+                  </div>
+                  <div>
+                    <dt>MAE</dt>
+                    <dd data-quality="mae">--</dd>
+                  </div>
+                  <div>
+                    <dt>RMSE</dt>
+                    <dd data-quality="rmse">--</dd>
+                  </div>
+                  <div>
+                    <dt>覆盖率</dt>
+                    <dd data-quality="coverage">--</dd>
+                  </div>
+                </dl>
+                <p data-quality="note">--</p>
+              </div>
 
               <div class="zoom-panel" data-zoom-panel>
                 <div class="zoom-readout">
@@ -173,6 +199,6 @@
       </form>
     </dialog>
 
-    <script type="module" src="/src/main.js?v=20260523-notice"></script>
+    <script type="module" src="/src/main.js?v=20260523-monitor"></script>
   </body>
 </html>

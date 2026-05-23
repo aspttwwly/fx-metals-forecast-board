@@ -1,10 +1,16 @@
 const manifestUrl = "/data/manifest.json";
+const visitEndpoint = "/api/visits";
+const localVisitKey = "fxForecastBoard.visitCount.v1";
+const qualityPanelOffsetKey = "fxForecastBoard.qualityPanelOffset.v2";
+
 const state = {
   manifest: null,
   data: null,
   symbol: null,
   pinnedSymbol: null,
   requestId: 0,
+  visitTracked: false,
+  qualityOffset: { x: 0, y: 0 },
   zoomStart: 0,
   zoomEnd: 100,
 };
@@ -23,6 +29,8 @@ const els = {
   zoomTo: document.querySelector("[data-zoom-to]"),
   zoomReset: document.querySelector("[data-zoom-reset]"),
   zoomPanel: document.querySelector("[data-zoom-panel]"),
+  qualityPanel: document.querySelector("[data-quality-panel]"),
+  visitCount: document.querySelector("[data-visit-count]"),
 };
 
 const formatDate = new Intl.DateTimeFormat("zh-CN", {
@@ -51,6 +59,16 @@ function formatSigned(value) {
   return `${sign}${formatNumber(value)}`;
 }
 
+function formatInteger(value) {
+  if (!Number.isFinite(value)) return "--";
+  return Math.round(value).toLocaleString("en-US");
+}
+
+function formatPercent(value, digits = 1) {
+  if (!Number.isFinite(value)) return "--";
+  return `${value.toFixed(digits)}%`;
+}
+
 function formatShortDate(value) {
   return formatDate.format(parseDate(value)).slice(0, 7);
 }
@@ -72,10 +90,205 @@ function summary(name, value) {
   });
 }
 
+function quality(name, value) {
+  document.querySelectorAll(`[data-quality="${name}"]`).forEach((node) => {
+    node.textContent = value;
+  });
+}
+
 async function fetchJson(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Unable to fetch ${url}`);
   return response.json();
+}
+
+function isFiniteNumber(value) {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function mean(values) {
+  if (!values.length) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function calculateForecastQuality(data) {
+  const comparable = data.series.filter(
+    (point) => !point.future && isFiniteNumber(point.actual) && isFiniteNumber(point.forecast),
+  );
+  const recent = comparable.slice(-52);
+  const absoluteErrors = recent.map((point) => Math.abs(point.actual - point.forecast));
+  const percentageErrors = recent
+    .filter((point) => Math.abs(point.actual) > Number.EPSILON)
+    .map((point) => Math.abs((point.actual - point.forecast) / point.actual));
+  const bandChecks = recent.filter(
+    (point) => isFiniteNumber(point.lower) && isFiniteNumber(point.upper),
+  );
+  const covered = bandChecks.filter((point) => point.actual >= point.lower && point.actual <= point.upper).length;
+  const mae = mean(absoluteErrors);
+  const mape = mean(percentageErrors);
+  const rmse = absoluteErrors.length
+    ? Math.sqrt(mean(absoluteErrors.map((value) => value * value)))
+    : null;
+  const coverage = bandChecks.length ? covered / bandChecks.length : null;
+
+  return {
+    samples: recent.length,
+    mae,
+    mape,
+    rmse,
+    coverage,
+  };
+}
+
+function qualityGrade(metrics) {
+  if (!metrics.samples || !Number.isFinite(metrics.mape)) return "样本不足";
+  const mape = metrics.mape * 100;
+  const coverage = Number.isFinite(metrics.coverage) ? metrics.coverage * 100 : null;
+
+  if (mape <= 1.5 && (coverage === null || coverage >= 72)) return "较高";
+  if (mape <= 3.5 && (coverage === null || coverage >= 58)) return "中等";
+  return "偏低";
+}
+
+function renderQuality(data) {
+  const metrics = calculateForecastQuality(data);
+
+  quality("grade", qualityGrade(metrics));
+  quality("mape", Number.isFinite(metrics.mape) ? formatPercent(metrics.mape * 100, 2) : "--");
+  quality("mae", Number.isFinite(metrics.mae) ? formatNumber(metrics.mae) : "--");
+  quality("rmse", Number.isFinite(metrics.rmse) ? formatNumber(metrics.rmse) : "--");
+  quality("coverage", Number.isFinite(metrics.coverage) ? formatPercent(metrics.coverage * 100, 0) : "--");
+  quality("note", `${metrics.samples || 0} 个历史重叠样本 / 最近 52 期窗口`);
+}
+
+function updateVisitCount(value, scope = "") {
+  if (!els.visitCount) return;
+  const label = scope ? `${formatInteger(value)} ${scope}` : formatInteger(value);
+  els.visitCount.setAttribute("aria-label", label);
+  els.visitCount.textContent = label;
+}
+
+function trackLocalVisit() {
+  try {
+    const current = Number(localStorage.getItem(localVisitKey) || "0");
+    const next = Number.isFinite(current) ? current + 1 : 1;
+    localStorage.setItem(localVisitKey, String(next));
+    updateVisitCount(next, "本机");
+  } catch {
+    updateVisitCount(1, "本机");
+  }
+}
+
+async function trackVisit(symbol) {
+  if (state.visitTracked || !els.visitCount) return;
+  state.visitTracked = true;
+
+  try {
+    const response = await fetch(visitEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol, path: location.pathname, at: new Date().toISOString() }),
+    });
+    const contentType = response.headers.get("content-type") || "";
+    if (!response.ok || !contentType.includes("application/json")) throw new Error("Visit endpoint unavailable");
+    const payload = await response.json();
+    if (!Number.isFinite(payload.total)) throw new Error("Visit endpoint returned no total");
+    updateVisitCount(payload.total);
+  } catch {
+    trackLocalVisit();
+  }
+}
+
+function applyQualityPanelOffset() {
+  if (!els.qualityPanel) return;
+  els.qualityPanel.style.setProperty("--quality-x", `${state.qualityOffset.x}px`);
+  els.qualityPanel.style.setProperty("--quality-y", `${state.qualityOffset.y}px`);
+}
+
+function restoreQualityPanelOffset() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(qualityPanelOffsetKey) || "null");
+    if (Number.isFinite(saved?.x) && Number.isFinite(saved?.y)) {
+      state.qualityOffset = { x: saved.x, y: saved.y };
+    }
+  } catch {
+    state.qualityOffset = { x: 0, y: 0 };
+  }
+
+  applyQualityPanelOffset();
+}
+
+function saveQualityPanelOffset() {
+  try {
+    localStorage.setItem(qualityPanelOffsetKey, JSON.stringify(state.qualityOffset));
+  } catch {
+    // Dragging still works for the current page even when storage is unavailable.
+  }
+}
+
+function clampQualityOffset(x, y) {
+  const panel = els.qualityPanel;
+  const wrap = panel?.parentElement;
+  if (!panel || !wrap) return { x, y };
+
+  const panelRect = panel.getBoundingClientRect();
+  const wrapRect = wrap.getBoundingClientRect();
+  const baseLeft = panelRect.left - state.qualityOffset.x;
+  const baseTop = panelRect.top - state.qualityOffset.y;
+  const minX = wrapRect.left - baseLeft + 8;
+  const maxX = wrapRect.right - baseLeft - panelRect.width - 8;
+  const minY = wrapRect.top - baseTop + 8;
+  const maxY = wrapRect.bottom - baseTop - panelRect.height - 8;
+
+  return {
+    x: Math.min(Math.max(x, minX), maxX),
+    y: Math.min(Math.max(y, minY), maxY),
+  };
+}
+
+function bindQualityPanelDrag() {
+  const panel = els.qualityPanel;
+  if (!panel) return;
+  restoreQualityPanelOffset();
+
+  let drag = null;
+  panel.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    drag = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: state.qualityOffset.x,
+      originY: state.qualityOffset.y,
+    };
+    panel.classList.add("dragging");
+    panel.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+
+  panel.addEventListener("pointermove", (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    state.qualityOffset = clampQualityOffset(
+      drag.originX + event.clientX - drag.startX,
+      drag.originY + event.clientY - drag.startY,
+    );
+    applyQualityPanelOffset();
+  });
+
+  const endDrag = (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    drag = null;
+    panel.classList.remove("dragging");
+    saveQualityPanelOffset();
+  };
+
+  panel.addEventListener("pointerup", endDrag);
+  panel.addEventListener("pointercancel", endDrag);
+  panel.addEventListener("dblclick", () => {
+    state.qualityOffset = { x: 0, y: 0 };
+    applyQualityPanelOffset();
+    saveQualityPanelOffset();
+  });
 }
 
 function currentRouteSymbol() {
@@ -475,6 +688,7 @@ async function loadSymbol(symbol, options = {}) {
   state.data = data;
   updateActiveInstrument();
   renderSummary(state.data);
+  renderQuality(state.data);
   renderChart(state.data);
   renderTable(state.data);
   document.title = `${symbol} / 汇率与贵金属预测观察`;
@@ -484,12 +698,15 @@ function bindUi() {
   document.querySelector("[data-prev]").addEventListener("click", () => pinSymbol(siblingSymbol(-1)));
   document.querySelector("[data-next]").addEventListener("click", () => pinSymbol(siblingSymbol(1)));
   document.querySelector("[data-open-risk]")?.addEventListener("click", () => els.riskDialog.showModal());
+  bindQualityPanelDrag();
   window.addEventListener("popstate", () => {
     state.pinnedSymbol = currentRouteSymbol();
     loadSymbol(state.pinnedSymbol, { source: "pinned" });
   });
   window.addEventListener("resize", () => {
     if (state.data) renderChart(state.data);
+    state.qualityOffset = clampQualityOffset(state.qualityOffset.x, state.qualityOffset.y);
+    applyQualityPanelOffset();
   });
 
   const setZoom = (changedSide) => {
@@ -527,6 +744,7 @@ function bindUi() {
 
   ["pointerenter", "pointermove", "mousemove", "mousedown", "touchstart"].forEach((eventName) => {
     els.zoomPanel.addEventListener(eventName, hideChartTooltip);
+    els.qualityPanel?.addEventListener(eventName, hideChartTooltip);
   });
 }
 
@@ -538,6 +756,7 @@ async function init() {
   const symbol = currentRouteSymbol();
   if (location.pathname === "/") history.replaceState({}, "", `/${symbol}`);
   await loadSymbol(symbol, { source: "initial" });
+  await trackVisit(symbol);
 }
 
 init().catch((error) => {
