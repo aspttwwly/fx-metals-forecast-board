@@ -898,18 +898,18 @@ td {
   color: var(--white);
 }
 
-.analytics-note {
+.investment-note {
   margin-top: auto;
   border-top: 1px solid var(--ink);
   padding-top: 14px;
 }
 
-.analytics-note span {
+.investment-note span {
   font-family: "Courier New", monospace;
   font-size: 12px;
 }
 
-.analytics-note p {
+.investment-note p {
   margin: 8px 0 0;
   color: var(--soft-ink);
   font-size: 13px;
