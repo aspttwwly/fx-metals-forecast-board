@@ -165,7 +165,7 @@ function updateVisitCount(value, scope = "") {
   if (!els.visitCount) return;
   const label = scope ? `${formatInteger(value)} ${scope}` : formatInteger(value);
   els.visitCount.setAttribute("aria-label", label);
-  els.visitCount.textContent = label;
+  els.visitCount.textContent = formatInteger(value);
 }
 
 function trackLocalVisit() {
