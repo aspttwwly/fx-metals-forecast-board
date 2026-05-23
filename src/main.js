@@ -511,7 +511,75 @@ function axisTicks(min, max, count) {
   return Array.from({ length: count }, (_, index) => min + step * index);
 }
 
+const svgNS = "http://www.w3.org/2000/svg";
+const cn = {};
+
+function svgEl(tag, attrs) {
+  const el = document.createElementNS(svgNS, tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+}
+
+function setAttrs(el, attrs) {
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
+}
+
+function showEl(el, visible) {
+  if (visible) el.removeAttribute("display");
+  else el.setAttribute("display", "none");
+}
+
+function initChart() {
+  if (cn.ready) return;
+  const svg = els.chart;
+  svg.setAttribute("viewBox", "0 0 1120 430");
+
+  const defs = svgEl("defs");
+  defs.innerHTML =
+    '<pattern id="future-hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">' +
+    '<line x1="0" y1="0" x2="0" y2="10" stroke="rgba(22,22,22,0.16)" stroke-width="1"/></pattern>' +
+    '<pattern id="band-hatch-wide" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(-35)">' +
+    '<line x1="0" y1="0" x2="0" y2="14" stroke="rgba(22,22,22,0.16)" stroke-width="1"/></pattern>' +
+    '<filter id="future-glow" x="-20%" y="-80%" width="140%" height="260%">' +
+    '<feGaussianBlur stdDeviation="4" result="blur"/>' +
+    '<feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.1 0 0 0 0 0.42 0 0 0 0 1 0 0 0 0.95 0" result="glow"/>' +
+    '<feMerge><feMergeNode in="glow"/><feMergeNode in="SourceGraphic"/></feMerge></filter>' +
+    '<filter id="actual-glow" x="-120%" y="-120%" width="340%" height="340%">' +
+    '<feGaussianBlur stdDeviation="5" result="blur"/>' +
+    '<feColorMatrix in="blur" type="matrix" values="1 0 0 0 1 0 0 0 0 0.08 0 0 0 0 0.06 0 0 0 0.9 0" result="glow"/>' +
+    '<feMerge><feMergeNode in="glow"/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
+
+  cn.futureZone = svgEl("rect", { class: "future-zone", fill: "url(#future-hatch)" });
+  cn.yLines = Array.from({ length: 4 }, () => svgEl("line", { class: "grid-line" }));
+  cn.yLabels = Array.from({ length: 4 }, () => svgEl("text", { class: "axis-label", "text-anchor": "end" }));
+  cn.xLabels = Array.from({ length: 5 }, () => svgEl("text", { class: "axis-label", "text-anchor": "middle" }));
+  cn.band = svgEl("path", { class: "forecast-band", fill: "url(#band-hatch-wide)" });
+  cn.bandUpper = svgEl("path", { class: "forecast-band-edge" });
+  cn.bandLower = svgEl("path", { class: "forecast-band-edge" });
+  cn.actual = svgEl("path", { class: "actual-line" });
+  cn.forecast = svgEl("path", { class: "forecast-line" });
+  cn.futureShadow = svgEl("path", { class: "future-flow future-flow-shadow", filter: "url(#future-glow)" });
+  cn.futureLine = svgEl("path", { class: "future-flow" });
+  cn.actualGlow = svgEl("circle", { class: "actual-current-glow", r: "10", filter: "url(#actual-glow)" });
+  cn.actualDot = svgEl("circle", { class: "actual-current-point", r: "4.8" });
+  cn.forecastDot = svgEl("circle", { class: "forecast-point", r: "5" });
+
+  svg.append(
+    defs,
+    cn.futureZone,
+    ...cn.yLines.flatMap((line, i) => [line, cn.yLabels[i]]),
+    ...cn.xLabels,
+    cn.band, cn.bandUpper, cn.bandLower,
+    cn.actual, cn.forecast,
+    cn.futureShadow, cn.futureLine,
+    cn.actualGlow, cn.actualDot, cn.forecastDot,
+  );
+  cn.ready = true;
+}
+
 function renderChart(data) {
+  initChart();
+
   const fullSeries = buildDisplaySeries(data);
   const series = zoomSeries(fullSeries);
   syncZoomUi(fullSeries);
@@ -531,75 +599,49 @@ function renderChart(data) {
 
   const yTicks = axisTicks(yMin, yMax, 4);
   const xTicks = axisTicks(xMin, xMax, 5);
-  const actualPath = linePath(series, x, y, "actual");
-  const forecastPath = linePath(series, x, y, "forecast");
   const futurePath = futureForecastPath(series, x, y, latestTime);
   const futureX = Math.max(pad.left, Math.min(pad.left + chartWidth, x(latestTime)));
   const latestActualPoint = series.find((point) => point.date === data.latestActual.date && point.actual !== null);
   const futureForecastPoint = series.find((point) => point.future && point.forecast !== null);
 
-  els.chart.setAttribute("viewBox", `0 0 ${width} ${height}`);
-  els.chart.innerHTML = `
-    <defs>
-      <pattern id="future-hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-        <line x1="0" y1="0" x2="0" y2="10" stroke="rgba(22,22,22,0.16)" stroke-width="1" />
-      </pattern>
-      <pattern id="band-hatch-wide" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(-35)">
-        <line x1="0" y1="0" x2="0" y2="14" stroke="rgba(22,22,22,0.16)" stroke-width="1" />
-      </pattern>
-      <filter id="future-glow" x="-20%" y="-80%" width="140%" height="260%">
-        <feGaussianBlur stdDeviation="4" result="blur" />
-        <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.1 0 0 0 0 0.42 0 0 0 0 1 0 0 0 0.95 0" result="glow" />
-        <feMerge>
-          <feMergeNode in="glow" />
-          <feMergeNode in="SourceGraphic" />
-        </feMerge>
-      </filter>
-      <filter id="actual-glow" x="-120%" y="-120%" width="340%" height="340%">
-        <feGaussianBlur stdDeviation="5" result="blur" />
-        <feColorMatrix in="blur" type="matrix" values="1 0 0 0 1 0 0 0 0 0.08 0 0 0 0 0.06 0 0 0 0.9 0" result="glow" />
-        <feMerge>
-          <feMergeNode in="glow" />
-          <feMergeNode in="SourceGraphic" />
-        </feMerge>
-      </filter>
-    </defs>
-    <rect class="future-zone" fill="url(#future-hatch)" x="${futureX}" y="${pad.top}" width="${pad.left + chartWidth - futureX}" height="${chartHeight}" />
-    ${yTicks
-      .map(
-        (tick) => `
-          <line class="grid-line" x1="${pad.left}" x2="${pad.left + chartWidth}" y1="${y(tick)}" y2="${y(tick)}" />
-          <text class="axis-label" x="${pad.left - 12}" y="${y(tick) + 4}" text-anchor="end">${formatNumber(tick)}</text>
-        `,
-      )
-      .join("")}
-    ${xTicks
-      .map((tick) => {
-        const label = formatDate.format(new Date(tick)).slice(0, 7);
-        return `<text class="axis-label" x="${x(tick)}" y="${height - 10}" text-anchor="middle">${label}</text>`;
-      })
-      .join("")}
-    <path class="forecast-band" fill="url(#band-hatch-wide)" d="${areaPath(series, x, y, "lower", "upper", 1)}"></path>
-    <path class="forecast-band-edge" d="${bandBoundaryPath(series, x, y, "upper")}"></path>
-    <path class="forecast-band-edge" d="${bandBoundaryPath(series, x, y, "lower")}"></path>
-    <path class="actual-line" d="${actualPath}"></path>
-    <path class="forecast-line" d="${forecastPath}"></path>
-    ${futurePath ? `<path class="future-flow future-flow-shadow" d="${futurePath}" filter="url(#future-glow)"></path>` : ""}
-    ${futurePath ? `<path class="future-flow" d="${futurePath}"></path>` : ""}
-    ${
-      latestActualPoint
-        ? `
-          <circle class="actual-current-glow" cx="${x(latestActualPoint.time)}" cy="${y(latestActualPoint.actual)}" r="10" filter="url(#actual-glow)"></circle>
-          <circle class="actual-current-point" cx="${x(latestActualPoint.time)}" cy="${y(latestActualPoint.actual)}" r="4.8"></circle>
-        `
-        : ""
-    }
-    ${
-      futureForecastPoint
-        ? `<circle class="forecast-point" cx="${x(futureForecastPoint.time)}" cy="${y(futureForecastPoint.forecast)}" r="5"></circle>`
-        : ""
-    }
-  `;
+  setAttrs(cn.futureZone, { x: futureX, y: pad.top, width: pad.left + chartWidth - futureX, height: chartHeight });
+
+  yTicks.forEach((tick, i) => {
+    setAttrs(cn.yLines[i], { x1: pad.left, x2: pad.left + chartWidth, y1: y(tick), y2: y(tick) });
+    setAttrs(cn.yLabels[i], { x: pad.left - 12, y: y(tick) + 4 });
+    cn.yLabels[i].textContent = formatNumber(tick);
+  });
+
+  xTicks.forEach((tick, i) => {
+    setAttrs(cn.xLabels[i], { x: x(tick), y: height - 10 });
+    cn.xLabels[i].textContent = formatDate.format(new Date(tick)).slice(0, 7);
+  });
+
+  cn.band.setAttribute("d", areaPath(series, x, y, "lower", "upper", 1));
+  cn.bandUpper.setAttribute("d", bandBoundaryPath(series, x, y, "upper"));
+  cn.bandLower.setAttribute("d", bandBoundaryPath(series, x, y, "lower"));
+  cn.actual.setAttribute("d", linePath(series, x, y, "actual"));
+  cn.forecast.setAttribute("d", linePath(series, x, y, "forecast"));
+
+  showEl(cn.futureShadow, futurePath);
+  showEl(cn.futureLine, futurePath);
+  if (futurePath) {
+    cn.futureShadow.setAttribute("d", futurePath);
+    cn.futureLine.setAttribute("d", futurePath);
+  }
+
+  showEl(cn.actualGlow, latestActualPoint);
+  showEl(cn.actualDot, latestActualPoint);
+  if (latestActualPoint) {
+    const cx = x(latestActualPoint.time), cy = y(latestActualPoint.actual);
+    setAttrs(cn.actualGlow, { cx, cy });
+    setAttrs(cn.actualDot, { cx, cy });
+  }
+
+  showEl(cn.forecastDot, futureForecastPoint);
+  if (futureForecastPoint) {
+    setAttrs(cn.forecastDot, { cx: x(futureForecastPoint.time), cy: y(futureForecastPoint.forecast) });
+  }
 
   wireTooltip(series, { width, height, pad, xMin, xMax, x, y });
 }
