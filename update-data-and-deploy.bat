@@ -13,12 +13,12 @@ echo FX Metals Forecast Data Update
 echo ========================================
 echo.
 
-echo [1/5] Converting upload file Excel files...
+echo [1/6] Converting upload file Excel files...
 "%PYTHON_EXE%" scripts\convert-data.py
 if errorlevel 1 goto fail
 
 echo.
-echo [2/5] Checking generated data changes...
+echo [2/6] Checking generated data changes...
 git status --porcelain public/data > "%TEMP%\fx_metals_data_changes.txt"
 for %%A in ("%TEMP%\fx_metals_data_changes.txt") do set CHANGE_SIZE=%%~zA
 
@@ -26,8 +26,13 @@ if "%CHANGE_SIZE%"=="0" (
   del "%TEMP%\fx_metals_data_changes.txt" >nul 2>nul
   echo.
   echo No public/data changes found. Nothing to commit.
-  echo Checking for pending GitHub push...
-  git push
+  echo.
+  echo [3/6] Syncing latest GitHub changes...
+  git pull --rebase --autostash origin main
+  if errorlevel 1 goto sync_fail
+  echo.
+  echo [4/6] Checking for pending GitHub push...
+  git push origin main
   if errorlevel 1 goto fail
   echo.
   echo ========================================
@@ -41,20 +46,25 @@ if "%CHANGE_SIZE%"=="0" (
 del "%TEMP%\fx_metals_data_changes.txt" >nul 2>nul
 
 echo.
-echo [3/5] Staging generated data files...
+echo [3/6] Staging generated data files...
 git add public/data
 if errorlevel 1 goto fail
 
 for /f %%I in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd_HH-mm-ss"') do set STAMP=%%I
 
 echo.
-echo [4/5] Creating Git commit...
+echo [4/6] Creating Git commit...
 git commit -m "Update forecast data %STAMP%"
 if errorlevel 1 goto fail
 
 echo.
-echo [5/5] Pushing to GitHub for Cloudflare deploy...
-git push
+echo [5/6] Syncing latest GitHub changes...
+git pull --rebase --autostash origin main
+if errorlevel 1 goto sync_fail
+
+echo.
+echo [6/6] Pushing to GitHub for Cloudflare deploy...
+git push origin main
 if errorlevel 1 goto fail
 
 echo.
@@ -64,6 +74,17 @@ echo ========================================
 echo.
 pause
 exit /b 0
+
+:sync_fail
+echo.
+echo ========================================
+echo GitHub sync failed before push.
+echo If Git reports conflicts, resolve them and run:
+echo   git rebase --continue
+echo Or cancel the sync with:
+echo   git rebase --abort
+echo ========================================
+goto fail
 
 :fail
 echo.
