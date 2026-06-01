@@ -137,8 +137,9 @@ echo Local data changes or commits are kept on this computer.
 echo Check the network, VPN, or proxy.
 echo ========================================
 echo.
-choice /c RQ /n /m "Press R to retry now, or Q to quit: "
-if errorlevel 2 goto fail
+set "RETRY_CHOICE="
+set /p "RETRY_CHOICE=Press R to retry now, or press Enter/Q to quit: "
+if /I not "%RETRY_CHOICE%"=="R" goto fail
 echo.
 goto run_update
 
@@ -150,8 +151,9 @@ echo Local data changes or commits are kept on this computer.
 echo Check the network, VPN, or proxy.
 echo ========================================
 echo.
-choice /c RQ /n /m "Press R to retry now, or Q to quit: "
-if errorlevel 2 goto fail
+set "RETRY_CHOICE="
+set /p "RETRY_CHOICE=Press R to retry now, or press Enter/Q to quit: "
+if /I not "%RETRY_CHOICE%"=="R" goto fail
 echo.
 goto run_update
 
