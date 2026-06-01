@@ -99,7 +99,7 @@ if not errorlevel 1 exit /b 0
 if %GIT_ATTEMPT% GEQ %MAX_GIT_RETRIES% exit /b 1
 echo.
 echo GitHub connection check failed. Retrying in %GIT_RETRY_DELAY% seconds... Attempt %GIT_ATTEMPT% of %MAX_GIT_RETRIES%.
-timeout /t %GIT_RETRY_DELAY% /nobreak >nul
+powershell -NoProfile -Command "Start-Sleep -Seconds %GIT_RETRY_DELAY%"
 set /a GIT_ATTEMPT+=1
 goto git_check_retry
 
@@ -113,7 +113,7 @@ if exist ".git\rebase-apply" exit /b 2
 if %GIT_ATTEMPT% GEQ %MAX_GIT_RETRIES% exit /b 1
 echo.
 echo GitHub sync failed. Retrying in %GIT_RETRY_DELAY% seconds... Attempt %GIT_ATTEMPT% of %MAX_GIT_RETRIES%.
-timeout /t %GIT_RETRY_DELAY% /nobreak >nul
+powershell -NoProfile -Command "Start-Sleep -Seconds %GIT_RETRY_DELAY%"
 set /a GIT_ATTEMPT+=1
 goto git_pull_retry
 
@@ -125,7 +125,7 @@ if not errorlevel 1 exit /b 0
 if %GIT_ATTEMPT% GEQ %MAX_GIT_RETRIES% exit /b 1
 echo.
 echo GitHub push failed. Retrying in %GIT_RETRY_DELAY% seconds... Attempt %GIT_ATTEMPT% of %MAX_GIT_RETRIES%.
-timeout /t %GIT_RETRY_DELAY% /nobreak >nul
+powershell -NoProfile -Command "Start-Sleep -Seconds %GIT_RETRY_DELAY%"
 set /a GIT_ATTEMPT+=1
 goto git_push_retry
 
