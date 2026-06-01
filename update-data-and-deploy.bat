@@ -15,12 +15,18 @@ echo FX Metals Forecast Data Update
 echo ========================================
 echo.
 
-echo [1/7] Converting upload file Excel files...
+:run_update
+echo [1/8] Checking GitHub connection...
+call :git_check_with_retry
+if errorlevel 1 goto network_fail
+
+echo.
+echo [2/8] Converting upload file Excel files...
 "%PYTHON_EXE%" scripts\convert-data.py
 if errorlevel 1 goto fail
 
 echo.
-echo [2/7] Checking generated data changes...
+echo [3/8] Checking generated data changes...
 git status --porcelain public/data > "%TEMP%\fx_metals_data_changes.txt"
 for %%A in ("%TEMP%\fx_metals_data_changes.txt") do set CHANGE_SIZE=%%~zA
 
@@ -29,12 +35,12 @@ if "%CHANGE_SIZE%"=="0" (
   echo.
   echo No public/data changes found. Nothing to commit.
   echo.
-  echo [3/7] Syncing latest GitHub changes...
+  echo [4/8] Syncing latest GitHub changes...
   call :git_pull_with_retry
   if errorlevel 2 goto sync_fail
   if errorlevel 1 goto network_fail
   echo.
-  echo [4/7] Checking for pending GitHub push...
+  echo [5/8] Checking for pending GitHub push...
   call :git_push_with_retry
   if errorlevel 1 goto push_fail
   echo.
@@ -49,31 +55,31 @@ if "%CHANGE_SIZE%"=="0" (
 del "%TEMP%\fx_metals_data_changes.txt" >nul 2>nul
 
 echo.
-echo [3/7] Syncing latest GitHub changes before commit...
+echo [4/8] Syncing latest GitHub changes before commit...
 call :git_pull_with_retry
 if errorlevel 2 goto sync_fail
 if errorlevel 1 goto network_fail
 
 echo.
-echo [4/7] Staging generated data files...
+echo [5/8] Staging generated data files...
 git add public/data
 if errorlevel 1 goto fail
 
 for /f %%I in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd_HH-mm-ss"') do set STAMP=%%I
 
 echo.
-echo [5/7] Creating Git commit...
+echo [6/8] Creating Git commit...
 git commit -m "Update forecast data %STAMP%"
 if errorlevel 1 goto fail
 
 echo.
-echo [6/7] Final GitHub sync check...
+echo [7/8] Final GitHub sync check...
 call :git_pull_with_retry
 if errorlevel 2 goto sync_fail
 if errorlevel 1 goto network_fail
 
 echo.
-echo [7/7] Pushing to GitHub for Cloudflare deploy...
+echo [8/8] Pushing to GitHub for Cloudflare deploy...
 call :git_push_with_retry
 if errorlevel 1 goto push_fail
 
@@ -84,6 +90,18 @@ echo ========================================
 echo.
 pause
 exit /b 0
+
+:git_check_with_retry
+set "GIT_ATTEMPT=1"
+:git_check_retry
+git ls-remote --heads origin main >nul
+if not errorlevel 1 exit /b 0
+if %GIT_ATTEMPT% GEQ %MAX_GIT_RETRIES% exit /b 1
+echo.
+echo GitHub connection check failed. Retrying in %GIT_RETRY_DELAY% seconds... Attempt %GIT_ATTEMPT% of %MAX_GIT_RETRIES%.
+timeout /t %GIT_RETRY_DELAY% /nobreak >nul
+set /a GIT_ATTEMPT+=1
+goto git_check_retry
 
 :git_pull_with_retry
 set "GIT_ATTEMPT=1"
@@ -115,19 +133,27 @@ goto git_push_retry
 echo.
 echo ========================================
 echo Could not connect to GitHub after %MAX_GIT_RETRIES% attempts.
-echo Any local commit has been kept on this computer.
-echo Check the network, VPN, or proxy, then run this BAT again.
+echo Local data changes or commits are kept on this computer.
+echo Check the network, VPN, or proxy.
 echo ========================================
-goto fail
+echo.
+choice /c RQ /n /m "Press R to retry now, or Q to quit: "
+if errorlevel 2 goto fail
+echo.
+goto run_update
 
 :push_fail
 echo.
 echo ========================================
 echo GitHub push failed after %MAX_GIT_RETRIES% attempts.
-echo Any local commit has been kept on this computer.
-echo Check the network, VPN, or proxy, then run this BAT again.
+echo Local data changes or commits are kept on this computer.
+echo Check the network, VPN, or proxy.
 echo ========================================
-goto fail
+echo.
+choice /c RQ /n /m "Press R to retry now, or Q to quit: "
+if errorlevel 2 goto fail
+echo.
+goto run_update
 
 :sync_fail
 echo.
