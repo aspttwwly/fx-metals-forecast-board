@@ -48,6 +48,7 @@ if "%CHANGE_SIZE%"=="0" (
   echo Done. Cloudflare will deploy automatically if anything was pushed.
   echo ========================================
   echo.
+  if /I "%AUTOMATED%"=="1" exit /b 0
   pause
   exit /b 0
 )
@@ -88,6 +89,7 @@ echo ========================================
 echo Done. Cloudflare will deploy automatically.
 echo ========================================
 echo.
+if /I "%AUTOMATED%"=="1" exit /b 0
 pause
 exit /b 0
 
@@ -137,6 +139,7 @@ echo Local data changes or commits are kept on this computer.
 echo Check the network, VPN, or proxy.
 echo ========================================
 echo.
+if /I "%AUTOMATED%"=="1" goto fail
 set "RETRY_CHOICE="
 set /p "RETRY_CHOICE=Press R to retry now, or press Enter/Q to quit: "
 if /I not "%RETRY_CHOICE%"=="R" goto fail
@@ -151,6 +154,7 @@ echo Local data changes or commits are kept on this computer.
 echo Check the network, VPN, or proxy.
 echo ========================================
 echo.
+if /I "%AUTOMATED%"=="1" goto fail
 set "RETRY_CHOICE="
 set /p "RETRY_CHOICE=Press R to retry now, or press Enter/Q to quit: "
 if /I not "%RETRY_CHOICE%"=="R" goto fail
@@ -174,5 +178,6 @@ echo ========================================
 echo Failed. Please read the error above.
 echo ========================================
 echo.
+if /I "%AUTOMATED%"=="1" exit /b 1
 pause
 exit /b 1
