@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,7 +11,7 @@ import openpyxl
 
 
 ROOT = Path(__file__).resolve().parents[1]
-UPLOAD_DIR = ROOT / "upload file"
+UPLOAD_DIR = Path(os.getenv("FX_FORECAST_UPLOAD_DIR", str(ROOT / "upload file"))).resolve()
 DATA_DIR = ROOT / "public" / "data"
 FILES_DIR = DATA_DIR / "files"
 
