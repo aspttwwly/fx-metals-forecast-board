@@ -5,11 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="汇率与贵金属预测观察：周频预测、历史收盘、下载文件。" />
     <title>汇率与贵金属预测观察</title>
-    <link rel="stylesheet" href="/src/styles.css?v=20260523-monitor" />
+    <link rel="stylesheet" href="/src/styles.css?v=20260712-terrain-scale-v1" />
   </head>
   <body>
+    <nav class="view-switcher" aria-label="界面模式">
+      <span class="view-switcher__label">INTERFACE</span>
+      <button type="button" data-view-switch="observatory" aria-pressed="true">
+        <span>01</span> OBSERVATORY
+      </button>
+      <button type="button" data-view-switch="constellation" aria-pressed="false">
+        <span>02</span> CONSTELLATION
+      </button>
+      <button type="button" data-view-switch="terrain" aria-pressed="false">
+        <span>03</span> TERRAIN
+      </button>
+    </nav>
+
     <main>
-      <section class="masthead" aria-labelledby="page-title">
+      <section class="masthead observatory-only" aria-labelledby="page-title">
         <p class="eyebrow">/ WEEKLY FORECAST OBSERVATORY</p>
         <h1 id="page-title">汇率与贵金属<br /><span>预测观察</span></h1>
         <div class="masthead-meta">
@@ -20,7 +33,7 @@
         </div>
       </section>
 
-      <section class="workspace" id="data">
+      <section class="workspace observatory-only" id="data">
         <section class="chart-stage" aria-labelledby="instrument-title">
           <div class="stage-grid" aria-hidden="true"></div>
           <div class="stage-glass">
@@ -150,7 +163,28 @@
         </aside>
       </section>
 
-      <section class="below-grid">
+      <section class="below-grid observatory-only">
+        <section class="terrain-card" data-terrain-card aria-label="等高线地形过滤状态">
+          <div class="terrain-card__head">
+            <div>
+              <span>/ H4 TERRAIN FILTER</span>
+              <strong data-terrain="state">--</strong>
+            </div>
+            <b data-terrain="action">--</b>
+            <div class="terrain-gate" aria-label="地形趋势强度">
+              <i data-terrain-gate></i>
+            </div>
+          </div>
+          <dl class="terrain-metrics">
+            <div><dt>4周策略：原始 → 执行</dt><dd data-terrain="direction">--</dd></div>
+            <div><dt>地形强度</dt><dd data-terrain="gate">--</dd></div>
+            <div><dt>均线一致度</dt><dd data-terrain="coherence">--</dd></div>
+            <div><dt>仓位系数</dt><dd data-terrain="size">--</dd></div>
+            <div><dt>止盈 / 止损</dt><dd data-terrain="levels">--</dd></div>
+            <div><dt>地形日期</dt><dd data-terrain="date">--</dd></div>
+          </dl>
+          <p class="terrain-card__note" data-terrain="note">等待策略地形数据</p>
+        </section>
         <div class="table-panel">
           <div class="section-title">
             <span class="square hatched"></span>
@@ -179,11 +213,217 @@
           </div>
           <a class="download-link" data-download="forecast" href="#">预测文件</a>
           <a class="download-link" data-download="history" href="#">历史收盘文件</a>
+          <a class="download-link" data-download="terrain" href="#">地形状态文件</a>
+          <a class="download-link" data-download="tradeSignals" href="#">交易信号文件</a>
           <div class="investment-note">
             <span>/ NOTICE</span>
             <p>本页面仅供研究观察，不构成投资建议、交易指令或收益承诺。汇率与贵金属价格可能大幅波动，请自行判断并承担风险。</p>
           </div>
         </aside>
+      </section>
+
+      <section class="constellation-view" data-constellation-view hidden aria-labelledby="constellation-title">
+        <header class="constellation-head">
+          <div class="constellation-brand">
+            <div class="ink-title">
+              <svg class="ink-filter" aria-hidden="true">
+                <filter id="ink-bleed" x="-10%" y="-18%" width="120%" height="136%">
+                  <feTurbulence type="fractalNoise" baseFrequency="0.018 0.065" numOctaves="2" seed="11" result="noise" />
+                  <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.2" xChannelSelector="R" yChannelSelector="B" />
+                </filter>
+              </svg>
+              <i class="ink-splash ink-splash-a" aria-hidden="true"></i>
+              <i class="ink-splash ink-splash-b" aria-hidden="true"></i>
+              <i class="ink-splash ink-splash-c" aria-hidden="true"></i>
+              <h1 id="constellation-title" aria-label="资产预测空间"><b>资产</b><em>预测空间</em></h1>
+            </div>
+          </div>
+          <div class="constellation-status">
+            <span>DATA PULSE</span>
+            <strong data-atlas="updated">--</strong>
+            <i aria-hidden="true"></i>
+          </div>
+        </header>
+
+        <div class="constellation-shell">
+          <section class="atlas-field-panel" aria-label="全市场资产预测空间">
+            <div class="atlas-field-head">
+              <div>
+                <span data-atlas-space-title>MARKET COORDINATES / 市场坐标</span>
+                <strong data-atlas="horizon">WEEK 01</strong>
+              </div>
+              <div class="atlas-mode-switch" aria-label="预测空间分析模式">
+                <button type="button" data-atlas-mode="market" aria-pressed="true">市场坐标</button>
+                <button type="button" data-atlas-mode="tunnel" aria-pressed="false">空间隧道</button>
+              </div>
+              <div class="atlas-field-legend" aria-label="预测空间图例">
+                <span><i class="legend-axis x"></i><b data-atlas-axis="x">X−看跌 / X+看涨</b></span>
+                <span><i class="legend-axis y"></i><b data-atlas-axis="y">Y−弱 / Y+强</b></span>
+                <span><i class="legend-axis z"></i><b data-atlas-axis="z">Z−确定 / Z+不确定</b></span>
+              </div>
+            </div>
+
+            <div class="atlas-field is-3d" data-atlas-field tabindex="0" aria-label="三维资产预测空间。拖拽旋转，滚轮缩放，方向键调整视角。">
+              <svg data-atlas-svg viewBox="0 0 1000 620" preserveAspectRatio="none" role="img" aria-label="预测变化、可信度与不确定性的三维分布"></svg>
+              <div class="atlas-nodes" data-atlas-nodes></div>
+              <div class="atlas-camera-hud">
+                <span>DRAG TO ORBIT / SCROLL TO ZOOM</span>
+                <strong data-atlas="camera">YAW −28° / PITCH 16° / 1.0×</strong>
+              </div>
+              <div class="atlas-camera-actions">
+                <button type="button" data-atlas-reset>RESET VIEW</button>
+                <button type="button" data-atlas-auto>◎ AUTO ORBIT</button>
+              </div>
+              <div class="atlas-zoom-control" aria-label="预测空间缩放控制">
+                <span>SPACE SCALE</span>
+                <button type="button" data-atlas-zoom-out aria-label="缩小预测空间">−</button>
+                <input type="range" min="45" max="200" value="100" step="5" data-atlas-zoom aria-label="调整预测空间缩放比例" />
+                <button type="button" data-atlas-zoom-in aria-label="放大预测空间">+</button>
+                <output data-atlas="zoom">100%</output>
+              </div>
+              <div class="atlas-axis-key" aria-hidden="true"><i data-atlas-key="x">X</i><i data-atlas-key="y">Y</i><i data-atlas-key="z">Z</i></div>
+            </div>
+
+            <div class="atlas-timeline">
+              <div class="atlas-timeline-copy">
+                <span>FORECAST HORIZON</span>
+                <strong data-atlas="date">--</strong>
+              </div>
+              <input type="range" min="0" max="5" value="0" step="1" data-atlas-week aria-label="选择预测周次" />
+              <div class="atlas-weekmarks" data-atlas-weekmarks></div>
+              <button type="button" class="atlas-play" data-atlas-play aria-label="播放预测时间轴">
+                <span aria-hidden="true">▶</span> PULSE
+              </button>
+            </div>
+          </section>
+
+          <aside class="atlas-focus" aria-live="polite">
+            <div class="atlas-focus-index">
+              <span>SELECTED SIGNAL</span>
+              <strong data-atlas="index">01 / 10</strong>
+            </div>
+            <div class="atlas-focus-symbol">
+              <p data-atlas="group">--</p>
+              <h2 data-atlas="symbol">--</h2>
+              <span data-atlas="name">--</span>
+            </div>
+            <div class="atlas-orbit" data-atlas-orbit aria-hidden="true">
+              <i></i><i></i><i></i><b></b>
+            </div>
+            <dl class="atlas-focus-metrics">
+              <div><dt>当前值</dt><dd data-atlas="actual">--</dd></div>
+              <div><dt>所选周预测</dt><dd data-atlas="forecast">--</dd></div>
+              <div><dt>预期变化</dt><dd data-atlas="move">--</dd></div>
+              <div><dt>可信度</dt><dd data-atlas="confidence">--</dd></div>
+              <div><dt>Z 轴不确定性</dt><dd data-atlas="uncertainty">--</dd></div>
+              <div><dt>预测区间</dt><dd data-atlas="range">--</dd></div>
+              <div><dt>空间坐标</dt><dd data-atlas="coordinate">--</dd></div>
+            </dl>
+            <p class="atlas-focus-note" data-atlas="note">--</p>
+            <button type="button" class="atlas-return" data-view-switch="observatory">
+              返回精确曲线 <span>↗</span>
+            </button>
+          </aside>
+        </div>
+
+        <footer class="constellation-footer">
+          <div><span data-atlas="up-count">--</span><small data-atlas-stat="one">上行信号</small></div>
+          <div><span data-atlas="down-count">--</span><small data-atlas-stat="two">下行信号</small></div>
+          <div><span data-atlas="avg-move">--</span><small data-atlas-stat="three">平均绝对变化</small></div>
+          <p data-atlas-stat="note">三维坐标、光晕与轨迹均由预测数据生成。拖拽空间可从任意方向观察。</p>
+        </footer>
+      </section>
+
+      <section class="terrain-view" data-terrain-view hidden aria-labelledby="terrain-title">
+        <header class="terrain-page-head">
+          <div class="terrain-page-head__copy">
+            <p>/ GMMA TOPOGRAPHY · HISTORY + FORECAST</p>
+            <h1 id="terrain-title" aria-label="GMMA 等高线"><span>GMMA</span><em>等高线</em></h1>
+            <span data-terrain-page="subtitle">--</span>
+            <div class="terrain-survey-index" aria-label="地形模型说明">
+              <span>GMMA / 12 EMA</span>
+              <span>FIELD / SCALAR DENSITY</span>
+              <span>INTERVAL / ATR ADAPTIVE</span>
+            </div>
+          </div>
+          <div class="terrain-page-symbol">
+            <button type="button" data-terrain-prev aria-label="上一个品种">←</button>
+            <strong data-terrain-page="symbol">--</strong>
+            <button type="button" data-terrain-next aria-label="下一个品种">→</button>
+          </div>
+        </header>
+
+        <div class="terrain-page-layout">
+          <section class="terrain-chart-panel" aria-label="GMMA 历史地形与未来预测图">
+            <div class="terrain-chart-head">
+              <div class="terrain-chart-legend" aria-label="地形图图例">
+                <span><i class="terrain-legend-close"></i>实际收盘</span>
+                <span><i class="terrain-legend-density"></i>GMMA 标量密度</span>
+                <span><i class="terrain-legend-ridge"></i>能量山脊</span>
+                <span><i class="terrain-legend-future"></i>未来预测</span>
+              </div>
+              <div class="terrain-chart-controls">
+                <div class="terrain-scale-mode" aria-label="等高线纵向观察范围">
+                  <span>纵向视野</span>
+                  <button type="button" data-terrain-scale="local" aria-pressed="true">局部</button>
+                  <button type="button" data-terrain-scale="global" aria-pressed="false">全局</button>
+                </div>
+                <div class="terrain-field-mode" aria-label="地形呈现模式">
+                  <button type="button" data-terrain-mode="price" aria-pressed="true">价格地形</button>
+                  <button type="button" data-terrain-mode="density">密度等高线</button>
+                </div>
+                <div class="terrain-range" aria-label="历史观察范围">
+                  <button type="button" data-terrain-range="1Y">1Y</button>
+                  <button type="button" data-terrain-range="3Y" aria-pressed="true">3Y</button>
+                  <button type="button" data-terrain-range="ALL">ALL</button>
+                </div>
+              </div>
+            </div>
+            <div class="terrain-chart-wrap">
+              <canvas data-terrain-field width="1160" height="650" aria-hidden="true"></canvas>
+              <svg data-terrain-chart viewBox="0 0 1160 650" preserveAspectRatio="none" role="img" aria-label="历史价格、GMMA 等高线、地形强度与未来预测路径"></svg>
+              <button class="terrain-height-splitter" type="button" data-terrain-splitter aria-label="上下拖动调整实际行情和等高线图的高度">
+                <span aria-hidden="true">↕</span><b>拖动调整高度</b>
+              </button>
+              <div class="terrain-tooltip" data-terrain-tooltip hidden></div>
+            </div>
+            <div class="terrain-zoom-control">
+              <div class="terrain-zoom-copy">
+                <span>历史时间缩放</span>
+                <strong data-terrain-zoom-dates>--</strong>
+              </div>
+              <div class="terrain-zoom-slider" data-terrain-zoom-slider>
+                <i aria-hidden="true"></i>
+                <input type="range" min="0" max="100" step="1" value="0" data-terrain-zoom-start aria-label="地形时间缩放起点" />
+                <input type="range" min="0" max="100" step="1" value="100" data-terrain-zoom-end aria-label="地形时间缩放终点" />
+              </div>
+              <output data-terrain-zoom-summary>显示全部历史</output>
+              <button type="button" data-terrain-zoom-reset>显示全部</button>
+            </div>
+          </section>
+
+          <aside class="terrain-page-diagnostics">
+            <div class="terrain-page-state">
+              <span>当前地形</span>
+              <strong data-terrain-page="state">--</strong>
+              <b data-terrain-page="action">--</b>
+            </div>
+            <dl>
+              <div><dt>四周策略</dt><dd data-terrain-page="direction">--</dd></div>
+              <div><dt>地形强度</dt><dd data-terrain-page="gate">--</dd></div>
+              <div><dt>均线一致度</dt><dd data-terrain-page="coherence">--</dd></div>
+              <div><dt>转化能量 / ATR</dt><dd data-terrain-page="energy">--</dd></div>
+              <div><dt>山脊强度</dt><dd data-terrain-page="score">--</dd></div>
+              <div><dt>仓位系数</dt><dd data-terrain-page="size">--</dd></div>
+              <div><dt>地形延续</dt><dd data-terrain-page="regime">--</dd></div>
+              <div><dt>预测目标</dt><dd data-terrain-page="target">--</dd></div>
+              <div><dt>止盈 / 止损</dt><dd data-terrain-page="levels">--</dd></div>
+            </dl>
+            <p data-terrain-page="note">--</p>
+          </aside>
+        </div>
+
+        <div class="terrain-symbols" data-terrain-symbols aria-label="切换地形品种"></div>
       </section>
     </main>
 
@@ -200,6 +440,6 @@
       </form>
     </dialog>
 
-    <script type="module" src="/src/main.js?v=20260523-monitor"></script>
+    <script type="module" src="/src/main.js?v=20260712-terrain-scale-v1"></script>
   </body>
 </html>

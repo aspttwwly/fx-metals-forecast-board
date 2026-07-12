@@ -4,6 +4,7 @@ import json
 import math
 import os
 import shutil
+import csv
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -11,9 +12,36 @@ import openpyxl
 
 
 ROOT = Path(__file__).resolve().parents[1]
-UPLOAD_DIR = Path(os.getenv("FX_FORECAST_UPLOAD_DIR", str(ROOT / "upload file"))).resolve()
+FORECAST_PROJECT_DIR = Path(
+    os.getenv("FX_FORECAST_PROJECT_DIR", str(ROOT.parent / "02 Prophet退火算法 20260201"))
+).resolve()
+DEFAULT_UPLOAD_DIR = (
+    FORECAST_PROJECT_DIR / "upload file"
+    if (FORECAST_PROJECT_DIR / "upload file").exists()
+    else ROOT / "upload file"
+)
+UPLOAD_DIR = Path(os.getenv("FX_FORECAST_UPLOAD_DIR", str(DEFAULT_UPLOAD_DIR))).resolve()
+TERRAIN_SNAPSHOT_PATH = Path(
+    os.getenv(
+        "FX_TERRAIN_SNAPSHOT_PATH",
+        str(FORECAST_PROJECT_DIR / "prophet output" / "terrain" / "latest_terrain_snapshot.xlsx"),
+    )
+).resolve()
+TRADE_SIGNAL_PATH = Path(
+    os.getenv(
+        "FX_TRADE_SIGNAL_PATH",
+        str(FORECAST_PROJECT_DIR / "prophet output" / "trade signals" / "latest_trade_signals.xlsx"),
+    )
+).resolve()
+TERRAIN_FEATURE_DIR = Path(
+    os.getenv(
+        "FX_TERRAIN_FEATURE_DIR",
+        str(FORECAST_PROJECT_DIR / "prophet output" / "terrain"),
+    )
+).resolve()
 DATA_DIR = ROOT / "public" / "data"
 FILES_DIR = DATA_DIR / "files"
+TERRAIN_DATA_DIR = DATA_DIR / "terrain"
 
 GROUPS = {
     "人民币相关": ["USDCNH", "EURCNH", "GBPCNH", "AUDCNH"],
@@ -71,7 +99,148 @@ def fmt(value: float) -> float:
     return round(value, 5)
 
 
-def build_symbol(symbol: str) -> dict:
+def json_value(value):
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, (int, float)):
+        if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+            return None
+        return value
+    return str(value)
+
+
+def read_records_by_symbol(path: Path) -> dict[str, dict]:
+    if not path.exists():
+        print(f"Optional strategy data not found: {path}")
+        return {}
+    workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    sheet = workbook[workbook.sheetnames[0]]
+    rows = sheet.iter_rows(values_only=True)
+    headers = [str(value) if value is not None else "" for value in next(rows, [])]
+    records: dict[str, dict] = {}
+    for values in rows:
+        record = {header: json_value(value) for header, value in zip(headers, values) if header}
+        symbol = str(record.get("Pair") or "").upper()
+        if symbol:
+            records[symbol] = record
+    return records
+
+
+def number_or_none(value):
+    return value if isinstance(value, (int, float)) and math.isfinite(float(value)) else None
+
+
+def csv_number(value):
+    try:
+        number = float(value)
+        return number if math.isfinite(number) else None
+    except (TypeError, ValueError):
+        return None
+
+
+def read_terrain_series(symbol: str, limit: int = 1040) -> list[dict]:
+    path = TERRAIN_FEATURE_DIR / f"{symbol}_terrain_features.csv"
+    if not path.exists():
+        return []
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.DictReader(handle))[-limit:]
+    fast_periods = [3, 5, 8, 10, 12, 15]
+    slow_periods = [30, 35, 40, 45, 50, 60]
+    series = []
+    for row in rows:
+        close = csv_number(row.get("Close"))
+        if not row.get("Date") or close is None:
+            continue
+        fast = [csv_number(row.get(f"EMA_{period}")) for period in fast_periods]
+        slow = [csv_number(row.get(f"EMA_{period}")) for period in slow_periods]
+        d_layers = [csv_number(row.get(f"D{index}")) for index in range(1, 7)]
+        area_layers = [csv_number(row.get(f"Area_{index}")) for index in range(1, 7)]
+        if any(value is None for value in fast + slow + d_layers + area_layers):
+            continue
+        trend = csv_number(row.get("Trend"))
+        coherence = csv_number(row.get("coh"))
+        regime_age = csv_number(row.get("RegimeAge"))
+        series.append({
+            "date": row["Date"][:10],
+            "close": fmt(close),
+            "fast": [fmt(value) for value in fast],
+            "slow": [fmt(value) for value in slow],
+            "trend": int(trend) if trend is not None else 0,
+            "gate": round(csv_number(row.get("TerrainGate")) or 0.0, 6),
+            "score": round(csv_number(row.get("TrendScore")) or 0.0, 6),
+            "energyAtr": round(csv_number(row.get("EnergyATR")) or 0.0, 6),
+            "atr": fmt(csv_number(row.get("ATR14")) or 0.0),
+            "coherence": int(coherence) if coherence is not None else 0,
+            "regimeAge": int(regime_age) if regime_age is not None else 0,
+            "d": [fmt(value) for value in d_layers],
+            "area": [round(value, 6) for value in area_layers],
+        })
+    return series
+
+
+def build_terrain_payload(record: dict | None) -> dict | None:
+    if not record:
+        return None
+    return {
+        "date": record.get("TerrainDate"),
+        "state": record.get("TerrainState"),
+        "trend": number_or_none(record.get("TerrainTrend")),
+        "gate": number_or_none(record.get("TerrainGate")),
+        "trendScore": number_or_none(record.get("TerrainTrendScore")),
+        "threshold": number_or_none(record.get("TerrainThreshold")),
+        "band": number_or_none(record.get("TerrainBand")),
+        "coherence": number_or_none(record.get("TerrainCoherence")),
+        "coherenceRatio": number_or_none(record.get("TerrainCoherenceRatio")),
+        "regimeId": number_or_none(record.get("TerrainRegimeID")),
+        "regimeAge": number_or_none(record.get("TerrainRegimeAge")),
+        "energy": number_or_none(record.get("TerrainEnergy")),
+        "energyAtr": number_or_none(record.get("TerrainEnergyATR")),
+        "bundleOverlap": number_or_none(record.get("TerrainBundleOverlap")),
+        "bundleSep": number_or_none(record.get("TerrainBundleSep")),
+        "filterEnabled": bool(record.get("FilterEnabled")),
+    }
+
+
+def build_trade_payload(record: dict | None) -> dict | None:
+    if not record:
+        return None
+    number_fields = {
+        "signalHorizon": "SignalHorizon",
+        "terrainGate": "TerrainGate",
+        "terrainTrendScore": "TerrainTrendScore",
+        "terrainCoherence": "TerrainCoherence",
+        "terrainRegimeAge": "TerrainRegimeAge",
+        "sizeMultiplier": "TerrainSizeMultiplier",
+        "entryPrice": "EntryPrice",
+        "targetPrice": "TargetPrice",
+        "takeProfit": "TakeProfit",
+        "stopLoss": "StopLoss",
+        "returnPct": "ReturnPct",
+        "riskReward": "RiskReward",
+        "candidateNotional": "CandidateNotional",
+        "positionNotional": "PositionNotional",
+        "marginPct": "MarginPct",
+        "maxLossPct": "MaxLossPct",
+    }
+    payload = {key: number_or_none(record.get(source)) for key, source in number_fields.items()}
+    payload.update({
+        "runDate": record.get("RunDate"),
+        "engine": record.get("Engine"),
+        "decisionPolicy": record.get("DecisionPolicy"),
+        "decisionConfidence": record.get("DecisionConfidence"),
+        "rawDirection": record.get("RawDirection"),
+        "direction": record.get("Direction"),
+        "terrainState": record.get("TerrainState"),
+        "terrainDate": record.get("TerrainDate"),
+        "alignment": record.get("TerrainAlignment"),
+        "action": record.get("TerrainAction"),
+    })
+    return payload
+
+
+def build_symbol(symbol: str, terrain_records: dict[str, dict], trade_records: dict[str, dict]) -> dict:
     history_path = UPLOAD_DIR / f"{symbol}_diff_0th_diff.xlsx"
     forecast_path = UPLOAD_DIR / f"{symbol}_forecast.xlsx"
 
@@ -108,21 +277,28 @@ def build_symbol(symbol: str) -> dict:
             }
         )
 
+    trade_signal = build_trade_payload(trade_records.get(symbol))
+    terrain = build_terrain_payload(terrain_records.get(symbol))
     return {
         "symbol": symbol,
         "name": NAMES.get(symbol, symbol),
         "group": next(group for group, symbols in GROUPS.items() if symbol in symbols),
         "frequency": "周频",
-        "modelVersion": "Prophet annealing v1",
+        "modelVersion": "Prophet + Terrain v1" if trade_signal else "Prophet annealing v1",
         "generatedAt": datetime.now(timezone.utc).date().isoformat(),
         "sourceUpdatedAt": max(history_path.stat().st_mtime, forecast_path.stat().st_mtime),
         "latestActual": {"date": latest_actual_date, "value": fmt(latest_actual_value)},
         "nextForecast": {"date": next_forecast_date, "value": fmt(next_forecast_value)},
         "direction": direction,
         "deviation": fmt(deviation),
+        "terrain": terrain,
+        "terrainSeriesUrl": f"/data/terrain/{symbol}.json",
+        "tradeSignal": trade_signal,
         "files": {
             "forecast": f"/data/files/{forecast_path.name}",
             "history": f"/data/files/{history_path.name}",
+            "terrain": f"/data/files/{TERRAIN_SNAPSHOT_PATH.name}" if TERRAIN_SNAPSHOT_PATH.exists() else None,
+            "tradeSignals": f"/data/files/{TRADE_SIGNAL_PATH.name}" if TRADE_SIGNAL_PATH.exists() else None,
         },
         "series": series,
     }
@@ -131,12 +307,20 @@ def build_symbol(symbol: str) -> dict:
 def main() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     FILES_DIR.mkdir(parents=True, exist_ok=True)
+    TERRAIN_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     all_symbols = [symbol for symbols in GROUPS.values() for symbol in symbols]
     manifest_symbols = []
+    terrain_records = read_records_by_symbol(TERRAIN_SNAPSHOT_PATH)
+    trade_records = read_records_by_symbol(TRADE_SIGNAL_PATH)
 
     for symbol in all_symbols:
-        data = build_symbol(symbol)
+        data = build_symbol(symbol, terrain_records, trade_records)
+        terrain_series = read_terrain_series(symbol)
+        (TERRAIN_DATA_DIR / f"{symbol}.json").write_text(
+            json.dumps({"symbol": symbol, "series": terrain_series}, ensure_ascii=False, separators=(",", ":")),
+            encoding="utf-8",
+        )
         updated = datetime.fromtimestamp(data["sourceUpdatedAt"]).isoformat(timespec="seconds")
         data["sourceUpdatedAt"] = updated
         (DATA_DIR / f"{symbol}.json").write_text(
@@ -155,8 +339,14 @@ def main() -> None:
                 "latestActual": data["latestActual"],
                 "nextForecast": data["nextForecast"],
                 "direction": data["direction"],
+                "terrain": data["terrain"],
+                "tradeSignal": data["tradeSignal"],
             }
         )
+
+    for optional_path in [TERRAIN_SNAPSHOT_PATH, TRADE_SIGNAL_PATH]:
+        if optional_path.exists():
+            shutil.copy2(optional_path, FILES_DIR / optional_path.name)
 
     manifest = {
         "title": "汇率与贵金属预测观察",
