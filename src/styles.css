@@ -58,6 +58,12 @@
   font-size: 8px;
 }
 
+.view-switcher button[data-protected-view] span::after {
+  content: " / AUTH";
+  font-size: 6px;
+  letter-spacing: 0.05em;
+}
+
 .view-switcher button[aria-pressed="true"] {
   color: var(--paper);
   background: var(--ink);

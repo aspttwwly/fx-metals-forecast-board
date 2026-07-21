@@ -5,3 +5,4 @@ server.err.log
 screenshots/
 upload file/
 .runtime/
+.wrangler/

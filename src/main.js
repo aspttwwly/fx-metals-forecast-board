@@ -470,6 +470,15 @@ function routeUrl(symbol = state.symbol, view = state.view) {
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
+function openView(view) {
+  const next = ["constellation", "terrain"].includes(view) ? view : "observatory";
+  if (["constellation", "terrain"].includes(next) && currentRouteView(false) !== next) {
+    location.assign(routeUrl(state.symbol, next));
+    return;
+  }
+  setView(next);
+}
+
 function updateDocumentTitle() {
   document.title = state.view === "constellation"
     ? `${state.symbol || "市场"} / 资产预测空间`
@@ -2049,7 +2058,7 @@ function bindUi() {
   document.querySelector("[data-next]").addEventListener("click", () => pinSymbol(siblingSymbol(1)));
   document.querySelector("[data-open-risk]")?.addEventListener("click", () => els.riskDialog.showModal());
   document.querySelectorAll("[data-view-switch]").forEach((button) => {
-    button.addEventListener("click", () => setView(button.dataset.viewSwitch));
+    button.addEventListener("click", () => openView(button.dataset.viewSwitch));
   });
   document.querySelectorAll("[data-atlas-mode]").forEach((button) => {
     button.addEventListener("click", () => setAtlasMode(button.dataset.atlasMode));
@@ -2165,7 +2174,7 @@ function bindUi() {
 
 async function init() {
   state.manifest = await fetchJson(manifestUrl);
-  state.view = currentRouteView();
+  state.view = currentRouteView(false);
   state.atlasMode = currentAtlasMode();
   renderInstrumentRail();
   bindUi();
