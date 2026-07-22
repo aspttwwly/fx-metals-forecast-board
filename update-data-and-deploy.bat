@@ -22,12 +22,20 @@ call :git_check_with_retry
 if errorlevel 1 goto network_fail
 
 echo.
-echo [2/8] Converting upload file Excel files...
+echo [2/8] Preparing generated data and syncing latest GitHub changes...
+call :prepare_generated_data
+if errorlevel 1 goto sync_fail
+call :git_pull_with_retry
+if errorlevel 2 goto sync_fail
+if errorlevel 1 goto network_fail
+
+echo.
+echo [3/8] Converting upload file Excel files...
 "%PYTHON_EXE%" scripts\convert-data.py
 if errorlevel 1 goto fail
 
 echo.
-echo [3/8] Checking generated data changes...
+echo [4/8] Checking generated data changes...
 git status --porcelain public/data > "%TEMP%\fx_metals_data_changes.txt"
 for %%A in ("%TEMP%\fx_metals_data_changes.txt") do set CHANGE_SIZE=%%~zA
 
@@ -35,11 +43,6 @@ if "%CHANGE_SIZE%"=="0" (
   del "%TEMP%\fx_metals_data_changes.txt" >nul 2>nul
   echo.
   echo No public/data changes found. Nothing to commit.
-  echo.
-  echo [4/8] Syncing latest GitHub changes...
-  call :git_pull_with_retry
-  if errorlevel 2 goto sync_fail
-  if errorlevel 1 goto network_fail
   echo.
   echo [5/8] Checking for pending GitHub push...
   call :git_push_with_retry
@@ -55,12 +58,6 @@ if "%CHANGE_SIZE%"=="0" (
 )
 
 del "%TEMP%\fx_metals_data_changes.txt" >nul 2>nul
-
-echo.
-echo [4/8] Syncing latest GitHub changes before commit...
-call :git_pull_with_retry
-if errorlevel 2 goto sync_fail
-if errorlevel 1 goto network_fail
 
 echo.
 echo [5/8] Staging generated data files...
@@ -105,6 +102,15 @@ echo GitHub connection check failed. Retrying in %GIT_RETRY_DELAY% seconds... At
 powershell -NoProfile -Command "Start-Sleep -Seconds %GIT_RETRY_DELAY%"
 set /a GIT_ATTEMPT+=1
 goto git_check_retry
+
+:prepare_generated_data
+git diff --name-only --diff-filter=U | findstr /V /B /C:"public/data/" > "%TEMP%\fx_metals_non_data_conflicts.txt"
+for %%A in ("%TEMP%\fx_metals_non_data_conflicts.txt") do set NON_DATA_CONFLICT_SIZE=%%~zA
+del "%TEMP%\fx_metals_non_data_conflicts.txt" >nul 2>nul
+if not "%NON_DATA_CONFLICT_SIZE%"=="0" exit /b 1
+git restore --source=HEAD --staged --worktree -- public/data
+if errorlevel 1 exit /b 1
+exit /b 0
 
 :git_pull_with_retry
 set "GIT_ATTEMPT=1"
