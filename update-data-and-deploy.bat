@@ -3,7 +3,8 @@ setlocal
 
 cd /d "%~dp0"
 
-set "PYTHON_EXE=%USERPROFILE%\.conda\envs\quant_stock\python.exe"
+set "PYTHON_EXE=%FX_PYTHON_EXE%"
+if not defined PYTHON_EXE set "PYTHON_EXE=%USERPROFILE%\.conda\envs\quant_stock\python.exe"
 if not exist "%PYTHON_EXE%" set "PYTHON_EXE=C:\ProgramData\miniconda3\python.exe"
 if not exist "%PYTHON_EXE%" set "PYTHON_EXE=python"
 set "MAX_GIT_RETRIES=3"
