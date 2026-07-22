@@ -9,6 +9,8 @@ if not exist "%PYTHON_EXE%" set "PYTHON_EXE=C:\ProgramData\miniconda3\python.exe
 if not exist "%PYTHON_EXE%" set "PYTHON_EXE=python"
 set "MAX_GIT_RETRIES=3"
 set "GIT_RETRY_DELAY=10"
+set "GITHUB_FALLBACK_IP=140.82.112.3"
+set "GIT_HTTP_ROUTE="
 
 echo.
 echo ========================================
@@ -96,6 +98,12 @@ set "GIT_ATTEMPT=1"
 :git_check_retry
 git ls-remote --heads origin main >nul
 if not errorlevel 1 exit /b 0
+git -c http.curloptResolve=github.com:443:%GITHUB_FALLBACK_IP% ls-remote --heads origin main >nul
+if not errorlevel 1 (
+  set "GIT_HTTP_ROUTE=-c http.curloptResolve=github.com:443:%GITHUB_FALLBACK_IP%"
+  echo Using alternate GitHub HTTPS route %GITHUB_FALLBACK_IP%.
+  exit /b 0
+)
 if %GIT_ATTEMPT% GEQ %MAX_GIT_RETRIES% exit /b 1
 echo.
 echo GitHub connection check failed. Retrying in %GIT_RETRY_DELAY% seconds... Attempt %GIT_ATTEMPT% of %MAX_GIT_RETRIES%.
@@ -115,7 +123,7 @@ exit /b 0
 :git_pull_with_retry
 set "GIT_ATTEMPT=1"
 :git_pull_retry
-git pull --rebase --autostash origin main
+git %GIT_HTTP_ROUTE% pull --rebase --autostash origin main
 if not errorlevel 1 exit /b 0
 if exist ".git\rebase-merge" exit /b 2
 if exist ".git\rebase-apply" exit /b 2
@@ -129,7 +137,7 @@ goto git_pull_retry
 :git_push_with_retry
 set "GIT_ATTEMPT=1"
 :git_push_retry
-git push origin main
+git %GIT_HTTP_ROUTE% push origin main
 if not errorlevel 1 exit /b 0
 if %GIT_ATTEMPT% GEQ %MAX_GIT_RETRIES% exit /b 1
 echo.
