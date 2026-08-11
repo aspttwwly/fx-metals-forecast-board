@@ -9,7 +9,7 @@ if not exist "%PYTHON_EXE%" set "PYTHON_EXE=C:\ProgramData\miniconda3\python.exe
 if not exist "%PYTHON_EXE%" set "PYTHON_EXE=python"
 set "MAX_GIT_RETRIES=3"
 set "GIT_RETRY_DELAY=10"
-set "GITHUB_FALLBACK_IP=140.82.112.3"
+set "GITHUB_FALLBACK_IP=140.82.113.3"
 set "GIT_HTTP_ROUTE="
 
 echo.
