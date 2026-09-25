@@ -961,6 +961,19 @@ function parameterLifecycleStatusLabel(value, blockerCodes = []) {
   if (value === "CANDIDATE_HELD" && blockerCodes.includes("CANDIDATE_EVIDENCE_NOT_BOUND")) {
     return "候选等待专属证据";
   }
+  if (value === "CANDIDATE_HELD" && blockerCodes.includes("CANDIDATE_SHADOW_EVALUATION_ERROR")) {
+    return "候选影子评估失败";
+  }
+  if (value === "CANDIDATE_HELD" && blockerCodes.some((code) => (
+    code.startsWith("CANDIDATE_SKILL_")
+    || code.startsWith("CANDIDATE_HAC_")
+    || code.startsWith("CANDIDATE_DIRECTION_")
+  ))) {
+    return "候选影子未过准入";
+  }
+  if (value === "CANDIDATE_HELD" && blockerCodes.includes("CANDIDATE_HOLDOUT_OBSERVATIONS_BELOW_MINIMUM")) {
+    return "候选历史窗口不足";
+  }
   return ({
     ACTIVE_LOCKED: "在用参数锁定",
     CANDIDATE_HELD: "候选等待准入",
