@@ -136,6 +136,18 @@ function summary(name, value) {
   });
 }
 
+function monitor(name, value) {
+  document.querySelectorAll(`[data-monitor="${name}"]`).forEach((node) => {
+    node.textContent = value;
+  });
+}
+
+function evidence(name, value) {
+  document.querySelectorAll(`[data-evidence="${name}"]`).forEach((node) => {
+    node.textContent = value;
+  });
+}
+
 function terrain(name, value) {
   document.querySelectorAll(`[data-terrain="${name}"]`).forEach((node) => {
     node.textContent = value;
@@ -276,7 +288,7 @@ function renderQuality(data) {
   quality("mae", Number.isFinite(metrics.mae) ? formatNumber(metrics.mae) : "--");
   quality("rmse", Number.isFinite(metrics.rmse) ? formatNumber(metrics.rmse) : "--");
   quality("coverage", Number.isFinite(metrics.coverage) ? formatPercent(metrics.coverage * 100, 0) : "--");
-  quality("note", `${metrics.samples || 0} 个历史重叠样本 / 最近 52 期窗口`);
+  quality("note", `${metrics.samples || 0} 个历史重叠样本 / 最近 52 期窗口；参考带为固定规则，非概率区间`);
 }
 
 function updateVisitCount(value, scope = "") {
@@ -904,6 +916,28 @@ function renderSummary(data) {
   summary("version", data.modelVersion);
   summary("generated", generated);
   summary("note", `${data.name}：下一期较最新收盘${data.direction} ${formatSigned(data.deviation)}`);
+  const lifecycle = data.modelMonitor;
+  monitor("runDate", lifecycle?.forecastRunDate?.slice(0, 10) || "暂无");
+  monitor("dataCutoff", lifecycle?.sourceDataCutoff?.slice(0, 10) || "暂无");
+  monitor("params", lifecycle?.paramsRunId || "暂无");
+  const oosCount = lifecycle?.oosObservations == null ? null : Number(lifecycle.oosObservations);
+  monitor("oos", Number.isFinite(oosCount) ? `${oosCount} 期${oosCount < 13 ? " · 样本不足" : ""}` : "暂无");
+  monitor("revisions", lifecycle?.revisionComparisons ? `${lifecycle.revisionComparisons} 个可比目标周` : "暂无可比快照");
+  const governanceLabels = {
+    EVIDENCE_BUILDING: "当前决策链 · 证据积累中",
+    EVIDENCE_MISSING: "当前决策链 · 暂无证据",
+    ROUTINE: "常规监控",
+    WATCH: "加密观察",
+    INVESTIGATE: "人工调查",
+    INSUFFICIENT_EVIDENCE: "证据不足",
+    REVIEW_UNAVAILABLE: "复核不可用",
+  };
+  const governanceStatus = governanceLabels[lifecycle?.governanceStatus]
+    || (lifecycle?.jevStatus === "UNAVAILABLE_NO_KEY" ? "未评估 · 未配置密钥" : "未评估");
+  monitor("jev", governanceStatus);
+  monitor("note", lifecycle?.oosFlag?.includes("short_oos")
+    ? "冻结参数验证样本不足；当前完整决策链继续积累可比证据。"
+    : "治理状态由确定性证据门控制；JEV 意见单独标记为影子复核。");
   text('[data-meta="updated"]', updated);
 
   directionCard.classList.toggle("down", data.direction === "下行");
@@ -921,6 +955,87 @@ function renderSummary(data) {
   });
 
   renderTerrainCard(data);
+  renderEvidence(data);
+}
+
+function renderEvidence(data) {
+  const payload = data.forecastEvidence;
+  const lifecycle = data.modelMonitor || {};
+  const body = document.querySelector("[data-evidence-table]");
+  const legacyBadge = document.querySelector('[data-evidence-badge="legacy"]');
+  const currentBadge = document.querySelector('[data-evidence-badge="current"]');
+  if (!body || !legacyBadge || !currentBadge) return;
+
+  [legacyBadge, currentBadge].forEach((badge) => badge.classList.remove("is-ready", "is-building", "is-warning"));
+  if (!payload) {
+    legacyBadge.textContent = "历史基础模型：暂无证据";
+    currentBadge.textContent = "当前决策链：暂无证据";
+    legacyBadge.classList.add("is-warning");
+    currentBadge.classList.add("is-warning");
+    evidence("governance", "证据缺失");
+    evidence("coverage", "--");
+    evidence("jevRaw", "--");
+    evidence("note", "尚未生成无前视预测证据。请先运行本地证据生成步骤。");
+    body.innerHTML = '<tr><td colspan="5">暂无历史证据</td></tr>';
+    return;
+  }
+
+  const legacy = payload.legacy || {};
+  const current = payload.current || {};
+  const legacyReady = legacy.status === "AVAILABLE";
+  const currentReady = current.status === "AVAILABLE";
+  legacyBadge.textContent = `历史基础模型：${legacyReady ? "已有证据" : "暂无证据"}`;
+  currentBadge.textContent = `当前决策链：${currentReady ? "证据达标" : "积累中"}`;
+  legacyBadge.classList.add(legacyReady ? "is-ready" : "is-warning");
+  currentBadge.classList.add(currentReady ? "is-ready" : "is-building");
+
+  const governanceLabels = {
+    EVIDENCE_BUILDING: "证据积累中",
+    EVIDENCE_MISSING: "证据缺失",
+    ROUTINE: "常规监控",
+    WATCH: "加密观察",
+    INVESTIGATE: "人工调查",
+    INSUFFICIENT_EVIDENCE: "证据不足",
+    REVIEW_UNAVAILABLE: "复核不可用",
+  };
+  evidence("governance", governanceLabels[lifecycle.governanceStatus] || "待复核");
+  const minimum = Number(current.minimumObservationsPerHorizon) || 0;
+  const coverage = (current.horizons || [])
+    .map((row) => `h${row.horizonWeeks} ${row.observations || 0}/${minimum}`)
+    .join(" · ");
+  evidence("coverage", `快照 ${current.issuedVintages || 0} 次${coverage ? ` · ${coverage}` : ""}`);
+
+  const reviewLabels = {
+    routine: "常规观察",
+    watch: "加密观察",
+    investigate: "建议人工调查",
+    evidence_building: "当前证据积累中",
+    insufficient_evidence: "证据不足",
+  };
+  const legacyLabels = {
+    competitive: "历史模型具竞争力",
+    mixed: "历史模型表现混合",
+    underperforming: "历史模型落后基准",
+    insufficient_evidence: "历史证据不足",
+  };
+  const rawParts = [reviewLabels[lifecycle.reviewNeed], legacyLabels[lifecycle.legacyAssessment]].filter(Boolean);
+  evidence("jevRaw", rawParts.length ? rawParts.join(" · ") : "尚未完成影子复核");
+  evidence("note", `数据截至 ${legacy.sourceDataCutoff || "--"}。历史证据只评价 yhat_adj；当前 ensemble、地形过滤与执行链仍按快照单独积累。`);
+
+  const signedSkill = (value) => {
+    if (!Number.isFinite(value)) return "--";
+    const percent = value * 100;
+    return `${percent > 0 ? "+" : ""}${percent.toFixed(1)}%`;
+  };
+  body.innerHTML = (legacy.horizons || []).map((row) => `
+    <tr>
+      <td>${row.horizonWeeks} 周</td>
+      <td>${formatInteger(Number(row.observations))}</td>
+      <td>${formatNumber(row.rmse)}</td>
+      <td class="${Number(row.rmseSkillVsNaive) >= 0 ? "is-positive" : "is-negative"}">${signedSkill(row.rmseSkillVsNaive)}</td>
+      <td>${Number.isFinite(row.directionAccuracy) ? formatPercent(row.directionAccuracy * 100, 1) : "--"}</td>
+    </tr>
+  `).join("") || '<tr><td colspan="5">暂无成熟样本</td></tr>';
 }
 
 function terrainStateLabel(value) {
@@ -1852,7 +1967,7 @@ function renderAtlas() {
     return `
       <button class="atlas-node${active}${direction}" type="button" data-symbol="${snapshot.data.symbol}"
         style="--atlas-x:${(position.x / 10).toFixed(2)}%;--atlas-y:${(position.y / 6.2).toFixed(2)}%;--atlas-size:${size.toFixed(1)}px;--atlas-glow:${glow.toFixed(1)}px;--atlas-depth-scale:${depthScale.toFixed(3)};--atlas-depth-opacity:${depthOpacity.toFixed(3)}"
-        aria-label="${snapshot.data.name}，预期变化 ${formatPercent(snapshot.move, 2)}，可信度 ${Math.round(snapshot.confidence)}，不确定性 ${formatPercent(snapshot.uncertainty, 2)}">
+        aria-label="${snapshot.data.name}，预期变化 ${formatPercent(snapshot.move, 2)}，相对质量分 ${Math.round(snapshot.confidence)}，参考带宽度 ${formatPercent(snapshot.uncertainty, 2)}">
         <span class="atlas-node-core"></span>
         <strong>${snapshot.data.symbol}</strong>
         <small>${snapshot.move > 0 ? "+" : ""}${formatPercent(snapshot.move, 2)}</small>

@@ -42,6 +42,8 @@ TERRAIN_FEATURE_DIR = Path(
 DATA_DIR = ROOT / "public" / "data"
 FILES_DIR = DATA_DIR / "files"
 TERRAIN_DATA_DIR = DATA_DIR / "terrain"
+JEV_SHADOW_PATH = FORECAST_PROJECT_DIR / "prophet output" / "monitoring" / "latest_jev_shadow.json"
+FORECAST_EVIDENCE_PATH = FORECAST_PROJECT_DIR / "prophet output" / "monitoring" / "latest_forecast_evidence.json"
 
 GROUPS = {
     "人民币相关": ["USDCNH", "EURCNH", "GBPCNH", "AUDCNH"],
@@ -240,7 +242,104 @@ def build_trade_payload(record: dict | None) -> dict | None:
     return payload
 
 
-def build_symbol(symbol: str, terrain_records: dict[str, dict], trade_records: dict[str, dict]) -> dict:
+def read_model_monitor() -> dict[str, dict]:
+    """Publish only non-sensitive lifecycle metadata, never the full Jev state."""
+    if not JEV_SHADOW_PATH.exists():
+        return {}
+    payload = json.loads(JEV_SHADOW_PATH.read_text(encoding="utf-8"))
+    cutoff_by_run_date = {}
+    log_dir = FORECAST_PROJECT_DIR / "logs"
+    for summary_path in sorted(log_dir.glob("pipeline_run_*.json"), reverse=True):
+        try:
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if summary.get("status") in {"OK", "OK_WITH_DEFERRED_SYNC"} and summary.get("data_cutoff"):
+            cutoff_by_run_date.setdefault(str(summary.get("run_id", ""))[:8], summary["data_cutoff"])
+    result = {}
+    for row in payload.get("judgments", []):
+        pair = row.get("pair")
+        if pair not in NAMES:
+            continue
+        state = row.get("state") or {}
+        answers = row.get("answers") or {}
+        oos = state.get("frozen_oos") or {}
+        params = state.get("params") or {}
+        revisions = state.get("revisions") or []
+        governance = row.get("governance") or {}
+        result[pair] = {
+            "forecastRunDate": state.get("forecast_run_date"),
+            "sourceDataCutoff": state.get("source_data_cutoff") or cutoff_by_run_date.get(str(state.get("forecast_run_date", ""))[:10].replace("-", "")),
+            "paramsRunId": params.get("RunID"),
+            "oosObservations": oos.get("OOSEvalObs"),
+            "oosFlag": oos.get("ValidationFlag"),
+            "revisionComparisons": sum(1 for item in revisions if item.get("ComparableVintages", 0) > 0),
+            "jevStatus": row.get("status"),
+            "reviewNeed": (answers.get("review_need") or {}).get("choice"),
+            "mainIssue": (answers.get("main_issue") or {}).get("choice"),
+            "legacyAssessment": (answers.get("legacy_assessment") or {}).get("choice"),
+            "governanceStatus": governance.get("status"),
+            "governanceReason": governance.get("reason"),
+        }
+    return result
+
+
+def read_forecast_evidence() -> dict[str, dict]:
+    if not FORECAST_EVIDENCE_PATH.exists():
+        return {}
+    try:
+        payload = json.loads(FORECAST_EVIDENCE_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    result = {}
+    for symbol, source in (payload.get("pairs") or {}).items():
+        if symbol not in NAMES or not isinstance(source, dict):
+            continue
+        legacy = source.get("legacy_base_model") or {}
+        current = source.get("current_decision_chain") or {}
+        result[symbol] = {
+            "generatedAtUtc": payload.get("generated_at_utc"),
+            "legacy": {
+                "scope": legacy.get("scope"),
+                "status": legacy.get("status"),
+                "sourceDataCutoff": legacy.get("source_data_cutoff"),
+                "asofRule": legacy.get("asof_rule"),
+                "horizons": [
+                    {
+                        "horizonWeeks": row.get("horizon_weeks"),
+                        "observations": row.get("observations"),
+                        "rmse": (row.get("model") or {}).get("rmse"),
+                        "mae": (row.get("model") or {}).get("mae"),
+                        "directionAccuracy": (row.get("model") or {}).get("direction_accuracy"),
+                        "rmseSkillVsNaive": row.get("rmse_skill_vs_naive"),
+                        "rmseSkillVsDrift4": row.get("rmse_skill_vs_drift4"),
+                    }
+                    for row in legacy.get("horizons", [])
+                ],
+                "limitations": legacy.get("limitations") or [],
+            },
+            "current": {
+                "scope": current.get("scope"),
+                "status": current.get("status"),
+                "issuedVintages": current.get("issued_vintages"),
+                "comparableTargetDates": current.get("comparable_target_dates"),
+                "minimumObservationsPerHorizon": current.get("minimum_observations_per_horizon"),
+                "horizons": [
+                    {"horizonWeeks": row.get("horizon_weeks"), "observations": row.get("observations")}
+                    for row in current.get("horizons", [])
+                ],
+            },
+        }
+    return result
+
+
+def build_symbol(
+    symbol: str,
+    terrain_records: dict[str, dict],
+    trade_records: dict[str, dict],
+    model_monitor: dict[str, dict],
+    forecast_evidence: dict[str, dict],
+) -> dict:
     history_path = UPLOAD_DIR / f"{symbol}_diff_0th_diff.xlsx"
     forecast_path = UPLOAD_DIR / f"{symbol}_forecast.xlsx"
 
@@ -294,6 +393,8 @@ def build_symbol(symbol: str, terrain_records: dict[str, dict], trade_records: d
         "terrain": terrain,
         "terrainSeriesUrl": f"/data/terrain/{symbol}.json",
         "tradeSignal": trade_signal,
+        "modelMonitor": model_monitor.get(symbol),
+        "forecastEvidence": forecast_evidence.get(symbol),
         "files": {
             "forecast": f"/data/files/{forecast_path.name}",
             "history": f"/data/files/{history_path.name}",
@@ -313,9 +414,11 @@ def main() -> None:
     manifest_symbols = []
     terrain_records = read_records_by_symbol(TERRAIN_SNAPSHOT_PATH)
     trade_records = read_records_by_symbol(TRADE_SIGNAL_PATH)
+    model_monitor = read_model_monitor()
+    forecast_evidence = read_forecast_evidence()
 
     for symbol in all_symbols:
-        data = build_symbol(symbol, terrain_records, trade_records)
+        data = build_symbol(symbol, terrain_records, trade_records, model_monitor, forecast_evidence)
         terrain_series = read_terrain_series(symbol)
         (TERRAIN_DATA_DIR / f"{symbol}.json").write_text(
             json.dumps({"symbol": symbol, "series": terrain_series}, ensure_ascii=False, separators=(",", ":")),
