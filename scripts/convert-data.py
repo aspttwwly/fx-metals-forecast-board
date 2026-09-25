@@ -45,6 +45,7 @@ TERRAIN_DATA_DIR = DATA_DIR / "terrain"
 JEV_SHADOW_PATH = FORECAST_PROJECT_DIR / "prophet output" / "monitoring" / "latest_jev_shadow.json"
 FORECAST_EVIDENCE_PATH = FORECAST_PROJECT_DIR / "prophet output" / "monitoring" / "latest_forecast_evidence.json"
 MODEL_ADMISSION_PATH = FORECAST_PROJECT_DIR / "prophet output" / "monitoring" / "latest_model_admission.json"
+PARAMETER_LIFECYCLE_PATH = FORECAST_PROJECT_DIR / "prophet output" / "monitoring" / "latest_parameter_lifecycle.json"
 
 GROUPS = {
     "人民币相关": ["USDCNH", "EURCNH", "GBPCNH", "AUDCNH"],
@@ -386,6 +387,41 @@ def read_model_admission() -> dict[str, dict]:
     return result
 
 
+def read_parameter_lifecycle() -> dict[str, dict]:
+    if not PARAMETER_LIFECYCLE_PATH.exists():
+        return {}
+    try:
+        payload = json.loads(PARAMETER_LIFECYCLE_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    active = payload.get("active") or {}
+    candidate = payload.get("candidate") or {}
+    queued = payload.get("queued_candidate") or {}
+    gate = payload.get("gate") or {}
+    result = {}
+    for symbol, source in (payload.get("pairs") or {}).items():
+        if symbol not in NAMES or not isinstance(source, dict):
+            continue
+        result[symbol] = {
+            "status": source.get("lifecycle_status"),
+            "activeReleaseId": source.get("active_release_id"),
+            "activeParamsRunId": source.get("params_run_id"),
+            "candidateReleaseId": source.get("candidate_release_id"),
+            "previousReleaseId": source.get("previous_release_id"),
+            "previousParamsRunId": source.get("previous_params_run_id"),
+            "blockerCodes": source.get("blocker_codes") or [],
+            "lastAction": source.get("last_action"),
+            "activeCompositionId": active.get("composition_id"),
+            "candidateBatchId": candidate.get("release_id"),
+            "queuedCandidateBatchId": queued.get("release_id"),
+            "gateStatus": gate.get("status"),
+            "candidateEvidenceValid": gate.get("candidate_evidence_valid"),
+            "candidateEvidenceScope": gate.get("candidate_evidence_scope"),
+            "candidateEvidenceReleaseId": gate.get("candidate_evidence_release_id"),
+        }
+    return result
+
+
 def build_symbol(
     symbol: str,
     terrain_records: dict[str, dict],
@@ -393,6 +429,7 @@ def build_symbol(
     model_monitor: dict[str, dict],
     forecast_evidence: dict[str, dict],
     model_admission: dict[str, dict],
+    parameter_lifecycle: dict[str, dict],
 ) -> dict:
     history_path = UPLOAD_DIR / f"{symbol}_diff_0th_diff.xlsx"
     forecast_path = UPLOAD_DIR / f"{symbol}_forecast.xlsx"
@@ -450,6 +487,7 @@ def build_symbol(
         "modelMonitor": model_monitor.get(symbol),
         "forecastEvidence": forecast_evidence.get(symbol),
         "modelAdmission": model_admission.get(symbol),
+        "parameterLifecycle": parameter_lifecycle.get(symbol),
         "files": {
             "forecast": f"/data/files/{forecast_path.name}",
             "history": f"/data/files/{history_path.name}",
@@ -472,9 +510,18 @@ def main() -> None:
     model_monitor = read_model_monitor()
     forecast_evidence = read_forecast_evidence()
     model_admission = read_model_admission()
+    parameter_lifecycle = read_parameter_lifecycle()
 
     for symbol in all_symbols:
-        data = build_symbol(symbol, terrain_records, trade_records, model_monitor, forecast_evidence, model_admission)
+        data = build_symbol(
+            symbol,
+            terrain_records,
+            trade_records,
+            model_monitor,
+            forecast_evidence,
+            model_admission,
+            parameter_lifecycle,
+        )
         terrain_series = read_terrain_series(symbol)
         (TERRAIN_DATA_DIR / f"{symbol}.json").write_text(
             json.dumps({"symbol": symbol, "series": terrain_series}, ensure_ascii=False, separators=(",", ":")),

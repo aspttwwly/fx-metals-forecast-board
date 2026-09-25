@@ -917,9 +917,16 @@ function renderSummary(data) {
   summary("generated", generated);
   summary("note", `${data.name}：下一期较最新收盘${data.direction} ${formatSigned(data.deviation)}`);
   const lifecycle = data.modelMonitor;
+  const parameterLifecycle = data.parameterLifecycle || {};
   monitor("runDate", lifecycle?.forecastRunDate?.slice(0, 10) || "暂无");
   monitor("dataCutoff", lifecycle?.sourceDataCutoff?.slice(0, 10) || "暂无");
-  monitor("params", lifecycle?.paramsRunId || "暂无");
+  monitor("params", parameterLifecycle.activeParamsRunId || lifecycle?.paramsRunId || "暂无");
+  monitor("candidateParams", parameterLifecycle.candidateReleaseId || parameterLifecycle.candidateBatchId || "暂无候选");
+  monitor("parameterState", parameterLifecycleStatusLabel(
+    parameterLifecycle.status,
+    parameterLifecycle.blockerCodes || [],
+  ) || "尚未初始化");
+  monitor("rollbackTarget", parameterLifecycle.previousParamsRunId || parameterLifecycle.previousReleaseId || "--");
   const oosCount = lifecycle?.oosObservations == null ? null : Number(lifecycle.oosObservations);
   monitor("oos", Number.isFinite(oosCount) ? `${oosCount} 期${oosCount < 13 ? " · 样本不足" : ""}` : "暂无");
   monitor("revisions", lifecycle?.revisionComparisons ? `${lifecycle.revisionComparisons} 个可比目标周` : "暂无可比快照");
@@ -948,6 +955,20 @@ function renderSummary(data) {
 
   renderTerrainCard(data);
   renderEvidence(data);
+}
+
+function parameterLifecycleStatusLabel(value, blockerCodes = []) {
+  if (value === "CANDIDATE_HELD" && blockerCodes.includes("CANDIDATE_EVIDENCE_NOT_BOUND")) {
+    return "候选等待专属证据";
+  }
+  return ({
+    ACTIVE_LOCKED: "在用参数锁定",
+    CANDIDATE_HELD: "候选等待准入",
+    CANDIDATE_STALE: "候选基线已过期",
+    PROMOTED: "候选已晋级",
+    ROLLBACK_COMPLETED: "已恢复上一版",
+    ROLLBACK_BLOCKED: "回滚目标缺失",
+  })[value] || "";
 }
 
 function renderEvidence(data) {
