@@ -168,7 +168,7 @@
               <div><dt>参数运行批次</dt><dd data-monitor="params">--</dd></div>
               <div><dt>冻结参数样本</dt><dd data-monitor="oos">--</dd></div>
               <div><dt>同目标预测修订</dt><dd data-monitor="revisions">--</dd></div>
-              <div><dt>治理状态</dt><dd data-monitor="jev">--</dd></div>
+              <div><dt>模型准入</dt><dd data-monitor="jev">--</dd></div>
             </dl>
             <p data-monitor="note">仅显示模型复核状态，不生成交易或套保指令。</p>
           </section>
@@ -209,14 +209,14 @@
             </div>
           </div>
           <div class="evidence-summary">
-            <div><span>治理状态</span><strong data-evidence="governance">--</strong></div>
+            <div><span>品种准入状态</span><strong data-evidence="governance">--</strong></div>
             <div><span>当前证据进度</span><strong data-evidence="coverage">--</strong></div>
             <div><span>JEV 影子意见</span><strong data-evidence="jevRaw">--</strong></div>
           </div>
           <div class="evidence-table-scroll">
             <table class="evidence-table">
               <thead>
-                <tr><th>期限</th><th>成熟样本</th><th>RMSE</th><th>相对朴素基准</th><th>方向准确率</th></tr>
+                <tr><th>期限</th><th>当前准入</th><th>当前样本</th><th>历史样本</th><th>历史 RMSE</th><th>历史相对朴素</th><th>历史方向</th></tr>
               </thead>
               <tbody data-evidence-table></tbody>
             </table>

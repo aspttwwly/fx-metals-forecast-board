@@ -2492,7 +2492,7 @@ main {
 }
 
 .evidence-table {
-  min-width: 590px;
+  min-width: 880px;
 }
 
 .evidence-table th,
@@ -2509,6 +2509,44 @@ main {
 .evidence-table .is-negative {
   color: #9a315b;
   font-weight: 700;
+}
+
+.admission-pill {
+  display: inline-block;
+  border: 1px solid var(--ink);
+  padding: 4px 6px;
+  color: var(--soft-ink);
+  font: 700 9px/1 "Courier New", monospace;
+}
+
+.admission-pill.is-admitted {
+  border-color: #11715f;
+  color: #11715f;
+}
+
+.admission-pill.is-shadow {
+  border-color: #2f5f91;
+  color: #2f5f91;
+}
+
+.admission-pill.is-building {
+  border-color: #8a641c;
+  color: #8a641c;
+  background: #fff8df;
+}
+
+.admission-pill.is-research,
+.admission-pill.is-suspended,
+.admission-pill.is-rollback {
+  border-color: #9a315b;
+  color: #9a315b;
+}
+
+.admission-reason {
+  display: block;
+  margin-top: 5px;
+  color: var(--soft-ink);
+  font: 400 9px/1.25 "Courier New", monospace;
 }
 
 .evidence-card__note {

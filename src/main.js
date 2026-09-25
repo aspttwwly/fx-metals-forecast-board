@@ -923,16 +923,8 @@ function renderSummary(data) {
   const oosCount = lifecycle?.oosObservations == null ? null : Number(lifecycle.oosObservations);
   monitor("oos", Number.isFinite(oosCount) ? `${oosCount} 期${oosCount < 13 ? " · 样本不足" : ""}` : "暂无");
   monitor("revisions", lifecycle?.revisionComparisons ? `${lifecycle.revisionComparisons} 个可比目标周` : "暂无可比快照");
-  const governanceLabels = {
-    EVIDENCE_BUILDING: "当前决策链 · 证据积累中",
-    EVIDENCE_MISSING: "当前决策链 · 暂无证据",
-    ROUTINE: "常规监控",
-    WATCH: "加密观察",
-    INVESTIGATE: "人工调查",
-    INSUFFICIENT_EVIDENCE: "证据不足",
-    REVIEW_UNAVAILABLE: "复核不可用",
-  };
-  const governanceStatus = governanceLabels[lifecycle?.governanceStatus]
+  const governanceStatus = admissionStatusLabel(data.modelAdmission?.status)
+    || admissionStatusLabel(lifecycle?.governanceStatus)
     || (lifecycle?.jevStatus === "UNAVAILABLE_NO_KEY" ? "未评估 · 未配置密钥" : "未评估");
   monitor("jev", governanceStatus);
   monitor("note", lifecycle?.oosFlag?.includes("short_oos")
@@ -961,6 +953,7 @@ function renderSummary(data) {
 function renderEvidence(data) {
   const payload = data.forecastEvidence;
   const lifecycle = data.modelMonitor || {};
+  const admission = data.modelAdmission || {};
   const body = document.querySelector("[data-evidence-table]");
   const legacyBadge = document.querySelector('[data-evidence-badge="legacy"]');
   const currentBadge = document.querySelector('[data-evidence-badge="current"]');
@@ -976,7 +969,7 @@ function renderEvidence(data) {
     evidence("coverage", "--");
     evidence("jevRaw", "--");
     evidence("note", "尚未生成无前视预测证据。请先运行本地证据生成步骤。");
-    body.innerHTML = '<tr><td colspan="5">暂无历史证据</td></tr>';
+    body.innerHTML = '<tr><td colspan="7">暂无历史证据</td></tr>';
     return;
   }
 
@@ -989,16 +982,7 @@ function renderEvidence(data) {
   legacyBadge.classList.add(legacyReady ? "is-ready" : "is-warning");
   currentBadge.classList.add(currentReady ? "is-ready" : "is-building");
 
-  const governanceLabels = {
-    EVIDENCE_BUILDING: "证据积累中",
-    EVIDENCE_MISSING: "证据缺失",
-    ROUTINE: "常规监控",
-    WATCH: "加密观察",
-    INVESTIGATE: "人工调查",
-    INSUFFICIENT_EVIDENCE: "证据不足",
-    REVIEW_UNAVAILABLE: "复核不可用",
-  };
-  evidence("governance", governanceLabels[lifecycle.governanceStatus] || "待复核");
+  evidence("governance", admissionStatusLabel(admission.status) || "准入状态未生成");
   const minimum = Number(current.minimumObservationsPerHorizon) || 0;
   const coverage = (current.horizons || [])
     .map((row) => `h${row.horizonWeeks} ${row.observations || 0}/${minimum}`)
@@ -1020,22 +1004,68 @@ function renderEvidence(data) {
   };
   const rawParts = [reviewLabels[lifecycle.reviewNeed], legacyLabels[lifecycle.legacyAssessment]].filter(Boolean);
   evidence("jevRaw", rawParts.length ? rawParts.join(" · ") : "尚未完成影子复核");
-  evidence("note", `数据截至 ${legacy.sourceDataCutoff || "--"}。历史证据只评价 yhat_adj；当前 ensemble、地形过滤与执行链仍按快照单独积累。`);
+  const threshold = Number(admission.policy?.minimumCurrentObservations) || minimum;
+  evidence("note", `数据截至 ${legacy.sourceDataCutoff || "--"}。历史 yhat_adj 只作旧模型参考；当前完整链按每个期限至少 ${threshold || "--"} 个成熟样本独立准入，未获准入时操作信号强制保持观望。`);
 
   const signedSkill = (value) => {
     if (!Number.isFinite(value)) return "--";
     const percent = value * 100;
     return `${percent > 0 ? "+" : ""}${percent.toFixed(1)}%`;
   };
-  body.innerHTML = (legacy.horizons || []).map((row) => `
+  const admissionByHorizon = new Map((admission.horizons || []).map((row) => [Number(row.horizonWeeks), row]));
+  body.innerHTML = (legacy.horizons || []).map((row) => {
+    const gate = admissionByHorizon.get(Number(row.horizonWeeks)) || {};
+    const blocker = admissionBlockerLabel((gate.blockerCodes || [])[0]);
+    return `
     <tr>
       <td>${row.horizonWeeks} 周</td>
+      <td><span class="admission-pill ${admissionStatusClass(gate.status)}">${admissionStatusLabel(gate.status) || "--"}</span>${blocker ? `<small class="admission-reason">${blocker}</small>` : ""}</td>
+      <td>${formatInteger(Number(gate.currentObservations))}</td>
       <td>${formatInteger(Number(row.observations))}</td>
       <td>${formatNumber(row.rmse)}</td>
       <td class="${Number(row.rmseSkillVsNaive) >= 0 ? "is-positive" : "is-negative"}">${signedSkill(row.rmseSkillVsNaive)}</td>
       <td>${Number.isFinite(row.directionAccuracy) ? formatPercent(row.directionAccuracy * 100, 1) : "--"}</td>
     </tr>
-  `).join("") || '<tr><td colspan="5">暂无成熟样本</td></tr>';
+  `;
+  }).join("") || '<tr><td colspan="7">暂无成熟样本</td></tr>';
+}
+
+function admissionStatusLabel(value) {
+  return ({
+    RESEARCH_ONLY: "研究使用",
+    EVIDENCE_BUILDING: "证据积累中",
+    SHADOW_QUALIFIED: "影子验证合格",
+    PRODUCTION_ELIGIBLE: "可申请生产",
+    SUSPENDED: "已暂停",
+    ROLLBACK_REQUIRED: "需要回滚",
+    EVIDENCE_MISSING: "证据缺失",
+  })[value] || "";
+}
+
+function admissionStatusClass(value) {
+  return ({
+    PRODUCTION_ELIGIBLE: "is-admitted",
+    SHADOW_QUALIFIED: "is-shadow",
+    EVIDENCE_BUILDING: "is-building",
+    RESEARCH_ONLY: "is-research",
+    SUSPENDED: "is-suspended",
+    ROLLBACK_REQUIRED: "is-rollback",
+  })[value] || "";
+}
+
+function admissionBlockerLabel(value) {
+  return ({
+    CURRENT_OBSERVATIONS_BELOW_MINIMUM: "成熟样本未满门槛",
+    CURRENT_METRICS_MISSING: "当前指标尚未形成",
+    RMSE_SKILL_VS_NAIVE_BELOW_GATE: "未超过朴素基准",
+    RMSE_SKILL_VS_DRIFT4_BELOW_GATE: "未超过漂移基准",
+    DIRECTION_ACCURACY_BELOW_GATE: "方向准确率未达标",
+    OOS_OBSERVATIONS_BELOW_MINIMUM: "冻结样本不足",
+    REVISION_HISTORY_BELOW_MINIMUM: "修订历史不足",
+    REVISION_FLIP_RATE_ABOVE_LIMIT: "方向翻转过多",
+    STALE_SOURCE_DATA: "行情数据过期",
+    CRITICAL_PIPELINE_ALERT: "存在关键数据告警",
+  })[value] || "";
 }
 
 function terrainStateLabel(value) {
@@ -1054,10 +1084,12 @@ function terrainActionLabel(value) {
     REDUCE_NEUTRAL: "中性降仓",
     NO_SIGNAL: "无交易信号",
     BYPASS: "过滤已关闭",
+    ADMISSION_BLOCKED: "模型未准入",
   })[value] || "等待信号";
 }
 
 function terrainActionNote(value, alignment) {
+  if (value === "ADMISSION_BLOCKED") return "当前四周期限未通过模型准入门，公开操作状态强制保持观望。";
   if (value === "BLOCK_STRONG_CONFLICT") return "四周策略方向与强地形趋势相反，本期执行信号已拦截。";
   if (value === "REDUCE_CONFLICT") return "四周策略方向与地形相反但强度未达拦截线，本期保留方向并降低仓位。";
   if (value === "CONFIRM") return "四周策略方向与地形趋势一致，按地形强度配置执行仓位。";
@@ -1086,25 +1118,29 @@ function renderTerrainCard(data) {
     return;
   }
 
+  const admission = (data.modelAdmission?.horizons || []).find((row) => Number(row.horizonWeeks) === 4);
+  const executionEligible = admission?.executionEligible === true;
+  const effectiveAction = executionEligible ? trade.action : "ADMISSION_BLOCKED";
+  const effectiveDirection = executionEligible ? trade.direction : "FLAT";
   const gate = isFiniteNumber(terrainData.gate) ? clamp(terrainData.gate, 0, 1) : 0;
-  const multiplier = isFiniteNumber(trade.sizeMultiplier) ? clamp(trade.sizeMultiplier, 0, 1) : 0;
+  const multiplier = executionEligible && isFiniteNumber(trade.sizeMultiplier) ? clamp(trade.sizeMultiplier, 0, 1) : 0;
   const coherence = isFiniteNumber(terrainData.coherence) ? `${Math.round(terrainData.coherence)}/6` : "--";
   const rawDirection = tradeDirectionLabel(trade.rawDirection);
-  const finalDirection = tradeDirectionLabel(trade.direction);
+  const finalDirection = tradeDirectionLabel(effectiveDirection);
 
   card.classList.toggle("is-up", terrainData.state === "UP");
   card.classList.toggle("is-down", terrainData.state === "DOWN");
-  card.classList.toggle("is-blocked", trade.action === "BLOCK_STRONG_CONFLICT");
-  card.classList.toggle("is-flat", trade.direction === "FLAT");
+  card.classList.toggle("is-blocked", effectiveAction === "BLOCK_STRONG_CONFLICT" || effectiveAction === "ADMISSION_BLOCKED");
+  card.classList.toggle("is-flat", effectiveDirection === "FLAT");
   terrain("state", terrainStateLabel(terrainData.state));
-  terrain("action", terrainActionLabel(trade.action));
+  terrain("action", terrainActionLabel(effectiveAction));
   terrain("direction", `${rawDirection} → ${finalDirection}`);
   terrain("gate", formatPercent(gate * 100, 1));
   terrain("coherence", coherence);
   terrain("size", formatPercent(multiplier * 100, 1));
-  terrain("levels", `${formatNumber(trade.takeProfit)} / ${formatNumber(trade.stopLoss)}`);
+  terrain("levels", executionEligible ? `${formatNumber(trade.takeProfit)} / ${formatNumber(trade.stopLoss)}` : "-- / --");
   terrain("date", terrainData.date || trade.terrainDate || "--");
-  terrain("note", terrainActionNote(trade.action, trade.alignment));
+  terrain("note", terrainActionNote(effectiveAction, trade.alignment));
   if (gateBar) gateBar.style.width = `${Math.max(2, gate * 100).toFixed(1)}%`;
 }
 

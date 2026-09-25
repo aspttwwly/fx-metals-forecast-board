@@ -44,6 +44,7 @@ FILES_DIR = DATA_DIR / "files"
 TERRAIN_DATA_DIR = DATA_DIR / "terrain"
 JEV_SHADOW_PATH = FORECAST_PROJECT_DIR / "prophet output" / "monitoring" / "latest_jev_shadow.json"
 FORECAST_EVIDENCE_PATH = FORECAST_PROJECT_DIR / "prophet output" / "monitoring" / "latest_forecast_evidence.json"
+MODEL_ADMISSION_PATH = FORECAST_PROJECT_DIR / "prophet output" / "monitoring" / "latest_model_admission.json"
 
 GROUPS = {
     "人民币相关": ["USDCNH", "EURCNH", "GBPCNH", "AUDCNH"],
@@ -333,12 +334,65 @@ def read_forecast_evidence() -> dict[str, dict]:
     return result
 
 
+def read_model_admission() -> dict[str, dict]:
+    if not MODEL_ADMISSION_PATH.exists():
+        return {}
+    try:
+        payload = json.loads(MODEL_ADMISSION_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    policy = payload.get("policy") or {}
+    result = {}
+    for symbol, source in (payload.get("pairs") or {}).items():
+        if symbol not in NAMES or not isinstance(source, dict):
+            continue
+        result[symbol] = {
+            "status": source.get("status"),
+            "sourceDataCutoff": source.get("source_data_cutoff"),
+            "dataAgeDays": source.get("data_age_days"),
+            "oosObservations": source.get("oos_observations"),
+            "policy": {
+                "version": policy.get("version"),
+                "minimumCurrentObservations": policy.get("minimum_current_observations"),
+                "minimumRMSESkillVsNaive": policy.get("minimum_rmse_skill_vs_naive"),
+                "minimumRMSESkillVsDrift4": policy.get("minimum_rmse_skill_vs_drift4"),
+                "minimumDirectionAccuracy": policy.get("minimum_direction_accuracy"),
+                "minimumRevisionComparisons": policy.get("minimum_revision_comparisons"),
+                "maximumDirectionFlipRate": policy.get("maximum_direction_flip_rate"),
+                "minimumFrozenOOSObservations": policy.get("minimum_frozen_oos_observations"),
+                "maximumSourceDataAgeDays": policy.get("maximum_source_data_age_days"),
+            },
+            "horizons": [
+                {
+                    "horizonWeeks": row.get("horizon_weeks"),
+                    "status": row.get("status"),
+                    "desiredStatus": row.get("desired_status"),
+                    "previousStatus": row.get("previous_status"),
+                    "transitionReason": row.get("transition_reason"),
+                    "legacyReferenceStatus": row.get("legacy_reference_status"),
+                    "currentObservations": row.get("current_observations"),
+                    "rmseSkillVsNaive": row.get("rmse_skill_vs_naive"),
+                    "rmseSkillVsDrift4": row.get("rmse_skill_vs_drift4"),
+                    "directionAccuracy": row.get("direction_accuracy"),
+                    "revisionComparisons": row.get("revision_comparisons"),
+                    "directionFlipRate": row.get("direction_flip_rate"),
+                    "blockerCodes": [item.get("code") for item in row.get("blockers", []) if item.get("code")],
+                    "executionEligible": bool((row.get("allowed_uses") or {}).get("hedge_or_trade_execution")),
+                    "parameterPromotionEligible": bool((row.get("allowed_uses") or {}).get("parameter_promotion")),
+                }
+                for row in source.get("horizons", [])
+            ],
+        }
+    return result
+
+
 def build_symbol(
     symbol: str,
     terrain_records: dict[str, dict],
     trade_records: dict[str, dict],
     model_monitor: dict[str, dict],
     forecast_evidence: dict[str, dict],
+    model_admission: dict[str, dict],
 ) -> dict:
     history_path = UPLOAD_DIR / f"{symbol}_diff_0th_diff.xlsx"
     forecast_path = UPLOAD_DIR / f"{symbol}_forecast.xlsx"
@@ -395,6 +449,7 @@ def build_symbol(
         "tradeSignal": trade_signal,
         "modelMonitor": model_monitor.get(symbol),
         "forecastEvidence": forecast_evidence.get(symbol),
+        "modelAdmission": model_admission.get(symbol),
         "files": {
             "forecast": f"/data/files/{forecast_path.name}",
             "history": f"/data/files/{history_path.name}",
@@ -416,9 +471,10 @@ def main() -> None:
     trade_records = read_records_by_symbol(TRADE_SIGNAL_PATH)
     model_monitor = read_model_monitor()
     forecast_evidence = read_forecast_evidence()
+    model_admission = read_model_admission()
 
     for symbol in all_symbols:
-        data = build_symbol(symbol, terrain_records, trade_records, model_monitor, forecast_evidence)
+        data = build_symbol(symbol, terrain_records, trade_records, model_monitor, forecast_evidence, model_admission)
         terrain_series = read_terrain_series(symbol)
         (TERRAIN_DATA_DIR / f"{symbol}.json").write_text(
             json.dumps({"symbol": symbol, "series": terrain_series}, ensure_ascii=False, separators=(",", ":")),
