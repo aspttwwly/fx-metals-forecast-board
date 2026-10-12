@@ -6,3 +6,5 @@ screenshots/
 upload file/
 .runtime/
 .wrangler/
+__pycache__/
+*.pyc

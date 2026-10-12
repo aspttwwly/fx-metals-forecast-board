@@ -256,7 +256,7 @@ def read_model_monitor() -> dict[str, dict]:
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        if summary.get("status") in {"OK", "OK_WITH_DEFERRED_SYNC"} and summary.get("data_cutoff"):
+        if summary.get("status") in {"OK", "OK_WITH_DEFERRED_SYNC", "OK_WITH_WARNINGS"} and summary.get("data_cutoff"):
             cutoff_by_run_date.setdefault(str(summary.get("run_id", ""))[:8], summary["data_cutoff"])
     result = {}
     for row in payload.get("judgments", []):
@@ -277,6 +277,8 @@ def read_model_monitor() -> dict[str, dict]:
             "oosFlag": oos.get("ValidationFlag"),
             "revisionComparisons": sum(1 for item in revisions if item.get("ComparableVintages", 0) > 0),
             "jevStatus": row.get("status"),
+            "jevHttpStatus": row.get("http_status"),
+            "jevErrorCode": row.get("error_code"),
             "reviewNeed": (answers.get("review_need") or {}).get("choice"),
             "mainIssue": (answers.get("main_issue") or {}).get("choice"),
             "legacyAssessment": (answers.get("legacy_assessment") or {}).get("choice"),

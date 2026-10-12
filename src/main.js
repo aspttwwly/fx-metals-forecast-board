@@ -1,3 +1,5 @@
+import { jevStatusLabel } from "./model-monitor.js";
+
 const manifestUrl = "/data/manifest.json";
 const visitEndpoint = "/api/visits";
 const localVisitKey = "fxForecastBoard.visitCount.v1";
@@ -934,6 +936,7 @@ function renderSummary(data) {
     || admissionStatusLabel(lifecycle?.governanceStatus)
     || (lifecycle?.jevStatus === "UNAVAILABLE_NO_KEY" ? "未评估 · 未配置密钥" : "未评估");
   monitor("jev", governanceStatus);
+  monitor("jevService", jevStatusLabel(lifecycle || {}));
   monitor("note", lifecycle?.oosFlag?.includes("short_oos")
     ? "冻结参数验证样本不足；当前完整决策链继续积累可比证据。"
     : "治理状态由确定性证据门控制；JEV 意见单独标记为影子复核。");
@@ -1037,7 +1040,8 @@ function renderEvidence(data) {
     insufficient_evidence: "历史证据不足",
   };
   const rawParts = [reviewLabels[lifecycle.reviewNeed], legacyLabels[lifecycle.legacyAssessment]].filter(Boolean);
-  evidence("jevRaw", rawParts.length ? rawParts.join(" · ") : "尚未完成影子复核");
+  evidence("jevRaw", lifecycle.jevStatus === "SHADOW_EVALUATED" && rawParts.length
+    ? rawParts.join(" · ") : jevStatusLabel(lifecycle));
   const threshold = Number(admission.policy?.minimumCurrentObservations) || minimum;
   evidence("note", `数据截至 ${legacy.sourceDataCutoff || "--"}。历史 yhat_adj 只作旧模型参考；当前完整链按每个期限至少 ${threshold || "--"} 个成熟样本独立准入，未获准入时操作信号强制保持观望。`);
 

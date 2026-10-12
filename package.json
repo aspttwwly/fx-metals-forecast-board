@@ -7,8 +7,12 @@
     "build": "node scripts/build.mjs",
     "test": "node --test tests/*.test.mjs",
     "dev": "node server.mjs",
-    "deploy": "npm run build && npx wrangler deploy",
+    "deploy": "npm run build && npm run deploy:ci",
+    "deploy:ci": "node scripts/deploy.mjs",
     "cf:dev": "npm run build && npx wrangler dev",
     "convert:data": "python scripts/convert-data.py"
+  },
+  "devDependencies": {
+    "wrangler": "4.149.0"
   }
 }
