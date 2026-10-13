@@ -244,6 +244,13 @@ def build_trade_payload(record: dict | None) -> dict | None:
     return payload
 
 
+def jev_confidence(answer: dict) -> float | None:
+    value = answer.get("confidence")
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value) if 0 <= value <= 1 else None
+
+
 def read_model_monitor() -> dict[str, dict]:
     """Publish only non-sensitive lifecycle metadata, never the full Jev state."""
     if not JEV_SHADOW_PATH.exists():
@@ -264,7 +271,8 @@ def read_model_monitor() -> dict[str, dict]:
         if pair not in NAMES:
             continue
         state = row.get("state") or {}
-        answers = row.get("answers") or {}
+        evaluated = row.get("status") == "SHADOW_EVALUATED"
+        answers = (row.get("answers") or {}) if evaluated else {}
         oos = state.get("frozen_oos") or {}
         params = state.get("params") or {}
         revisions = state.get("revisions") or []
@@ -279,6 +287,11 @@ def read_model_monitor() -> dict[str, dict]:
             "jevStatus": row.get("status"),
             "jevHttpStatus": row.get("http_status"),
             "jevErrorCode": row.get("error_code"),
+            "jevModel": row.get("model") if evaluated else None,
+            "jevReviewedAtUtc": payload.get("created_at_utc"),
+            "reviewConfidence": jev_confidence(answers.get("review_need") or {}),
+            "mainIssueConfidence": jev_confidence(answers.get("main_issue") or {}),
+            "legacyAssessmentConfidence": jev_confidence(answers.get("legacy_assessment") or {}),
             "reviewNeed": (answers.get("review_need") or {}).get("choice"),
             "mainIssue": (answers.get("main_issue") or {}).get("choice"),
             "legacyAssessment": (answers.get("legacy_assessment") or {}).get("choice"),

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="汇率与贵金属预测观察：周频预测、历史收盘、下载文件。" />
     <title>汇率与贵金属预测观察</title>
-    <link rel="stylesheet" href="/src/styles.css?v=20260712-terrain-scale-v1" />
+    <link rel="stylesheet" href="/src/styles.css?v=20261013-jev-review-v1" />
   </head>
   <body>
     <nav class="view-switcher" aria-label="界面模式">
@@ -226,6 +226,27 @@
             </table>
           </div>
           <p class="evidence-card__note" data-evidence="note">历史证据仅评价已保存的基础模型输出，不代表当前完整决策链。</p>
+        </section>
+        <section class="evidence-card jev-review-card" aria-labelledby="jev-review-title">
+          <div class="evidence-card__head">
+            <div>
+              <span>/ JEV INDEPENDENT REVIEW · <span data-jev-review="symbol">当前品种</span></span>
+              <h2 id="jev-review-title">JEV独立复核</h2>
+            </div>
+            <strong class="jev-review-boundary">仅供复核，不参与数值计算</strong>
+          </div>
+          <dl class="jev-review-results">
+            <div><dt>当前复核等级</dt><dd data-jev-review="review">--</dd><dd class="jev-review-confidence">JEV 置信度 <strong data-jev-review="reviewConfidence">--</strong></dd></div>
+            <div><dt>主要风险来源 · JEV 判断</dt><dd data-jev-review="issue">--</dd><dd class="jev-review-confidence">JEV 置信度 <strong data-jev-review="issueConfidence">--</strong></dd></div>
+            <div><dt>旧基础模型评价</dt><dd data-jev-review="legacy">--</dd><dd class="jev-review-confidence">JEV 置信度 <strong data-jev-review="legacyConfidence">--</strong></dd></div>
+          </dl>
+          <dl class="jev-review-meta">
+            <div><dt>服务状态</dt><dd data-jev-review="status">--</dd></div>
+            <div><dt>复核模型</dt><dd data-jev-review="model">--</dd></div>
+            <div><dt>复核批次时间 · 北京时间</dt><dd data-jev-review="time">--</dd></div>
+          </dl>
+          <p class="evidence-card__note" data-jev-review="confidenceNote"></p>
+          <p class="evidence-card__note" data-jev-review="note"></p>
         </section>
         <div class="table-panel">
           <div class="section-title">
@@ -482,6 +503,6 @@
       </form>
     </dialog>
 
-    <script type="module" src="/src/main.js?v=20261012-jev-status-v1"></script>
+    <script type="module" src="/src/main.js?v=20261013-jev-review-v1"></script>
   </body>
 </html>

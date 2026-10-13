@@ -1,4 +1,4 @@
-import { jevStatusLabel } from "./model-monitor.js";
+import { jevStatusLabel, jevReviewView } from "./model-monitor.js?v=20261013-jev-review-v1";
 
 const manifestUrl = "/data/manifest.json";
 const visitEndpoint = "/api/visits";
@@ -958,6 +958,21 @@ function renderSummary(data) {
 
   renderTerrainCard(data);
   renderEvidence(data);
+  renderJevReview(data);
+}
+
+function renderJevReview(data) {
+  const view = jevReviewView(data.modelMonitor || {});
+  const values = {
+    symbol: `${data.symbol} · 当前品种`, status: view.status,
+    review: view.review.label, reviewConfidence: view.review.confidence,
+    issue: view.issue.label, issueConfidence: view.issue.confidence,
+    legacy: view.legacy.label, legacyConfidence: view.legacy.confidence,
+    model: view.model, time: view.time, note: view.note, confidenceNote: view.confidenceNote,
+  };
+  Object.entries(values).forEach(([key, value]) => {
+    document.querySelectorAll(`[data-jev-review="${key}"]`).forEach((node) => { node.textContent = value; });
+  });
 }
 
 function parameterLifecycleStatusLabel(value, blockerCodes = []) {

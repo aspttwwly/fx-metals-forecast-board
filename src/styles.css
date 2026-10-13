@@ -2581,11 +2581,72 @@ main {
   }
 }
 
+.jev-review-card {
+  box-shadow: inset 4px 0 0 #2c7167;
+}
+
+.jev-review-boundary {
+  padding: 8px 12px;
+  border: 2px solid #2c7167;
+  background: #edf6f2;
+  color: #205c53;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.jev-review-results,
+.jev-review-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 24px;
+  margin: 0;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line, #ccc);
+}
+
+.jev-review-results dt,
+.jev-review-meta dt {
+  color: var(--soft-ink);
+  font-size: 12px;
+}
+
+.jev-review-results dd,
+.jev-review-meta dd {
+  margin: 7px 0 0;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.jev-review-meta dd {
+  font: 700 13px/1.5 "Courier New", monospace;
+}
+
+.jev-review-results .jev-review-confidence {
+  color: var(--soft-ink);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.jev-review-confidence strong {
+  color: var(--ink);
+  margin-left: 6px;
+}
+
+@media (max-width: 680px) {
+  .jev-review-results,
+  .jev-review-meta { grid-template-columns: 1fr; }
+}
+
 .below-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
   gap: 14px;
   margin-top: 14px;
+}
+
+.below-grid > * {
+  min-width: 0;
 }
 
 .table-panel,
@@ -2749,6 +2810,10 @@ td {
   .workspace,
   .below-grid {
     grid-template-columns: 1fr;
+  }
+
+  .below-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .chart-stage {
