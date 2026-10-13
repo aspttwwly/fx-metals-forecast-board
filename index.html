@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="汇率与贵金属预测观察：周频预测、历史收盘、下载文件。" />
     <title>汇率与贵金属预测观察</title>
-    <link rel="stylesheet" href="/src/styles.css?v=20261013-jev-review-v1" />
+    <link rel="stylesheet" href="/src/styles.css?v=20261013-compact-summary-v1" />
   </head>
   <body>
     <nav class="view-switcher" aria-label="界面模式">
@@ -147,14 +147,6 @@
               <dt>最近预测点</dt>
               <dd data-summary="forecast">--</dd>
             </div>
-            <div>
-              <dt>模型版本</dt>
-              <dd data-summary="version">Prophet annealing v1</dd>
-            </div>
-            <div>
-              <dt>生成日期</dt>
-              <dd data-summary="generated">--</dd>
-            </div>
           </dl>
           <div class="direction-card" data-direction-card>
             <span class="triangle"></span>
@@ -163,18 +155,25 @@
           <section class="model-monitor" aria-label="模型生命周期监控">
             <h3>/ 模型生命周期</h3>
             <dl class="summary-list">
-              <div><dt>预测运行日</dt><dd data-monitor="runDate">--</dd></div>
               <div><dt>行情截止日</dt><dd data-monitor="dataCutoff">--</dd></div>
-              <div><dt>在用参数批次</dt><dd data-monitor="params">--</dd></div>
-              <div><dt>候选参数批次</dt><dd data-monitor="candidateParams">--</dd></div>
-              <div><dt>参数生命周期</dt><dd data-monitor="parameterState">--</dd></div>
-              <div><dt>回滚目标</dt><dd data-monitor="rollbackTarget">--</dd></div>
-              <div><dt>冻结参数样本</dt><dd data-monitor="oos">--</dd></div>
-              <div><dt>同目标预测修订</dt><dd data-monitor="revisions">--</dd></div>
               <div><dt>模型准入</dt><dd data-monitor="jev">--</dd></div>
+              <div><dt>参数生命周期</dt><dd data-monitor="parameterState">--</dd></div>
+              <div><dt>冻结参数样本</dt><dd data-monitor="oos">--</dd></div>
               <div><dt>JEV 服务</dt><dd data-monitor="jevService">--</dd></div>
             </dl>
             <p data-monitor="note">仅显示模型复核状态，不生成交易或套保指令。</p>
+            <details class="monitor-details">
+              <summary>参数与运行详情</summary>
+              <dl class="summary-list" tabindex="0" aria-label="参数与运行详细信息">
+                <div><dt>模型版本</dt><dd data-summary="version">Prophet annealing v1</dd></div>
+                <div><dt>生成日期</dt><dd data-summary="generated">--</dd></div>
+                <div><dt>预测运行日</dt><dd data-monitor="runDate">--</dd></div>
+                <div><dt>在用参数批次</dt><dd data-monitor="params">--</dd></div>
+                <div><dt>候选参数批次</dt><dd data-monitor="candidateParams">--</dd></div>
+                <div><dt>回滚目标</dt><dd data-monitor="rollbackTarget">--</dd></div>
+                <div><dt>同目标预测修订</dt><dd data-monitor="revisions">--</dd></div>
+              </dl>
+            </details>
           </section>
         </aside>
       </section>
@@ -503,6 +502,6 @@
       </form>
     </dialog>
 
-    <script type="module" src="/src/main.js?v=20261013-jev-review-v1"></script>
+    <script type="module" src="/src/main.js?v=20261013-compact-summary-v1"></script>
   </body>
 </html>

@@ -760,8 +760,9 @@ function renderChart(data) {
   const series = zoomSeries(fullSeries);
   syncZoomUi(fullSeries);
 
-  const width = 1120;
-  const height = 430;
+  const bounds = els.chart.getBoundingClientRect();
+  const width = Math.max(280, bounds.width || 1120);
+  const height = Math.max(250, bounds.height || 430);
   const pad = { top: 24, right: 24, bottom: 36, left: 66 };
   const chartWidth = width - pad.left - pad.right;
   const chartHeight = height - pad.top - pad.bottom;
@@ -774,7 +775,7 @@ function renderChart(data) {
   const y = (value) => pad.top + (1 - (value - yMin) / (yMax - yMin || 1)) * chartHeight;
 
   const yTicks = axisTicks(yMin, yMax, 4);
-  const xTicks = axisTicks(xMin, xMax, 5);
+  const xTicks = axisTicks(xMin, xMax, width < 500 ? 3 : 5);
   const actualPath = linePath(series, x, y, "actual");
   const forecastPath = linePath(series, x, y, "forecast");
   const futurePath = futureForecastPath(series, x, y, latestTime);
@@ -2322,6 +2323,14 @@ function bindUi() {
   els.atlasPlay?.addEventListener("click", toggleAtlasPulse);
   bindAtlasOrbitControls();
   bindQualityPanelDrag();
+  // Container height also changes when the sidebar's details are expanded.
+  const chartResizeObserver = new ResizeObserver(() => {
+    if (!state.data || state.view !== "observatory" || !els.chart.clientWidth) return;
+    renderChart(state.data);
+    state.qualityOffset = clampQualityOffset(state.qualityOffset.x, state.qualityOffset.y);
+    applyQualityPanelOffset();
+  });
+  chartResizeObserver.observe(els.chart);
   window.addEventListener("popstate", async () => {
     const routeView = currentRouteView(false);
     state.atlasMode = currentAtlasMode(false);
