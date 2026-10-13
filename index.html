@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="汇率与贵金属预测观察：周频预测、历史收盘、下载文件。" />
     <title>汇率与贵金属预测观察</title>
-    <link rel="stylesheet" href="/src/styles.css?v=20261013-compact-summary-v1" />
+    <link rel="stylesheet" href="/src/styles.css?v=20261014-replay-v1" />
   </head>
   <body>
     <nav class="view-switcher" aria-label="界面模式">
@@ -219,12 +219,41 @@
           <div class="evidence-table-scroll">
             <table class="evidence-table">
               <thead>
-                <tr><th>期限</th><th>当前准入</th><th>当前样本</th><th>历史样本</th><th>历史 RMSE</th><th>历史相对朴素</th><th>历史方向</th></tr>
+                <tr><th>期限</th><th>当前准入</th><th>当前记录（未去重）</th><th>历史样本</th><th>历史 RMSE</th><th>历史相对朴素</th><th>历史方向</th></tr>
               </thead>
               <tbody data-evidence-table></tbody>
             </table>
           </div>
           <p class="evidence-card__note" data-evidence="note">历史证据仅评价已保存的基础模型输出，不代表当前完整决策链。</p>
+        </section>
+        <section class="evidence-card replay-card" data-replay-card aria-labelledby="replay-title">
+          <div class="evidence-card__head">
+            <div><span>/ WEEKLY VALIDATION · <span data-replay="symbol">当前品种</span></span><h2 id="replay-title">双轨验证结果</h2></div>
+            <strong class="jev-review-boundary" data-replay="status">等待补测</strong>
+          </div>
+          <h3>历史逐周回放 · 早期反馈，不替代真实前向验证</h3>
+          <p class="evidence-card__note" data-replay="historical"></p>
+          <div class="evidence-table-scroll"><table class="evidence-table">
+            <thead><tr><th>期限</th><th>成熟周</th><th>各非重叠组周数</th><th>RMSE</th><th>MAE</th><th>方向命中率</th><th>相对不变价改善</th><th>相对4周漂移改善</th><th>近期是否变差</th></tr></thead>
+            <tbody data-replay-table="historical"></tbody>
+          </table></div>
+          <h3>每日真实留存 · 固定周频去重</h3>
+          <p class="evidence-card__note" data-replay="live"></p>
+          <div class="evidence-table-scroll"><table class="evidence-table">
+            <thead><tr><th>期限</th><th>成熟周</th><th>各非重叠组周数</th><th>RMSE</th><th>MAE</th><th>方向命中率</th><th>相对不变价改善</th><th>相对4周漂移改善</th><th>近期是否变差</th></tr></thead>
+            <tbody data-replay-table="live"></tbody>
+          </table></div>
+          <p class="evidence-card__note">RMSE / MAE 使用该品种报价单位，越低越好；改善 = 1 − 模型 RMSE / 基准 RMSE，正数优于基准。方向命中以预测与实际相对当期价格的涨跌符号比较，持平不算上涨或下跌命中。不同期限不合并计数。</p>
+          <p class="evidence-card__note">周周预测存在多周期重叠；所有固定间隔组均保留，不挑最佳组，也不称为独立样本。近期比较为最近 13 个成熟周与前 13 周，基准改善或方向命中率下降至少 10 个百分点提示观察，不代表统计显著恶化。</p>
+          <details class="replay-methods"><summary>查看取样规则、GMMA 与滚动输出诊断</summary>
+            <p class="evidence-card__note" data-replay="protocol"></p>
+            <p class="evidence-card__note">真实留存仅选完整周五之后、下一个周五之前该预测周最早发出的合格快照；不回填、不重复计数。历史回放主指标评价当时 decision 预测，滚动 FinalForecast 单独如下。GMMA 只过滤执行方向和仓位，不改变价格；过滤后方向命中率分母仅为保留的方向信号，不能直接与全样本命中率比较，也不是交易收益率。</p>
+            <div class="evidence-table-scroll"><table class="evidence-table">
+              <thead><tr><th>期限</th><th>滚动 RMSE</th><th>滚动相对不变价</th><th>GMMA 动作计数</th><th>保留方向 / 成熟周</th><th>保留信号方向命中</th></tr></thead><tbody data-replay-diagnostics></tbody>
+            </table></div>
+            <p class="evidence-card__note" data-replay="limitations"></p>
+            <a href="/data/replay-evidence.json" download>下载全部品种指标及所有非重叠组结果（JSON）</a>
+          </details>
         </section>
         <section class="evidence-card jev-review-card" aria-labelledby="jev-review-title">
           <div class="evidence-card__head">
@@ -502,6 +531,6 @@
       </form>
     </dialog>
 
-    <script type="module" src="/src/main.js?v=20261013-compact-summary-v1"></script>
+    <script type="module" src="/src/main.js?v=20261014-replay-v1"></script>
   </body>
 </html>

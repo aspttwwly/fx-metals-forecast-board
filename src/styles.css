@@ -3943,3 +3943,13 @@ body.is-terrain-splitting * {
     grid-template-columns: repeat(2, minmax(82px, 1fr));
   }
 }
+.replay-card h3 {
+  margin: 20px 0 8px;
+  font-size: 14px;
+}
+
+.replay-card .evidence-table { min-width: 1060px; }
+.replay-card .replay-recent { min-width: 170px; max-width: 250px; white-space: normal; line-height: 1.6; text-align: left; }
+.replay-methods { margin-top: 14px; padding-top: 12px; border-top: 1px solid #aaa; }
+.replay-methods summary { cursor: pointer; font-weight: 700; font-size: 13px; }
+.replay-methods a { display: inline-block; margin-top: 12px; color: inherit; font-size: 12px; }

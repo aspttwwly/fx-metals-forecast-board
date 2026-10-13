@@ -46,6 +46,7 @@ JEV_SHADOW_PATH = FORECAST_PROJECT_DIR / "prophet output" / "monitoring" / "late
 FORECAST_EVIDENCE_PATH = FORECAST_PROJECT_DIR / "prophet output" / "monitoring" / "latest_forecast_evidence.json"
 MODEL_ADMISSION_PATH = FORECAST_PROJECT_DIR / "prophet output" / "monitoring" / "latest_model_admission.json"
 PARAMETER_LIFECYCLE_PATH = FORECAST_PROJECT_DIR / "prophet output" / "monitoring" / "latest_parameter_lifecycle.json"
+REPLAY_EVIDENCE_PATH = FORECAST_PROJECT_DIR / "prophet output" / "monitoring" / "latest_replay_evidence.json"
 
 GROUPS = {
     "人民币相关": ["USDCNH", "EURCNH", "GBPCNH", "AUDCNH"],
@@ -350,6 +351,32 @@ def read_forecast_evidence() -> dict[str, dict]:
     return result
 
 
+def read_replay_evidence() -> dict[str, dict]:
+    if not REPLAY_EVIDENCE_PATH.exists():
+        return {}
+    payload = json.loads(REPLAY_EVIDENCE_PATH.read_text(encoding="utf-8"))
+    protocol = payload.get("protocol") or {}
+    result = {}
+    for symbol, row in (payload.get("pairs") or {}).items():
+        if symbol not in NAMES:
+            continue
+        historical = row.get("historical") or {}
+        progress = historical.get("progress") or {}
+        result[symbol] = {
+            "runId": payload.get("run_id"), "status": payload.get("status"),
+            "updatedAt": payload.get("generated_at_utc"), "purpose": protocol.get("purpose"),
+            "cutoff": protocol.get("data_cutoff"), "scoreStart": protocol.get("score_start"),
+            "scoreEnd": (protocol.get("origins") or [None])[-1],
+            "warmupWeeks": protocol.get("warmup_weeks"), "limitations": protocol.get("limitations") or [],
+            "historical": {key: historical.get(key) for key in ("completed_origins", "warmup_completed", "planned_origins", "horizons")},
+            "live": row.get("live"),
+        }
+        # Never publish local log paths, process IDs or error tracebacks.
+        result[symbol]["historical"]["progress"] = {key: progress.get(key) for key in ("status", "origin", "phase")}
+    (DATA_DIR / "replay-evidence.json").write_text(json.dumps(result, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    return result
+
+
 def read_model_admission() -> dict[str, dict]:
     if not MODEL_ADMISSION_PATH.exists():
         return {}
@@ -445,6 +472,7 @@ def build_symbol(
     forecast_evidence: dict[str, dict],
     model_admission: dict[str, dict],
     parameter_lifecycle: dict[str, dict],
+    replay_evidence: dict[str, dict] | None = None,
 ) -> dict:
     history_path = UPLOAD_DIR / f"{symbol}_diff_0th_diff.xlsx"
     forecast_path = UPLOAD_DIR / f"{symbol}_forecast.xlsx"
@@ -501,6 +529,7 @@ def build_symbol(
         "tradeSignal": trade_signal,
         "modelMonitor": model_monitor.get(symbol),
         "forecastEvidence": forecast_evidence.get(symbol),
+        "replayEvidence": (replay_evidence or {}).get(symbol),
         "modelAdmission": model_admission.get(symbol),
         "parameterLifecycle": parameter_lifecycle.get(symbol),
         "files": {
@@ -526,6 +555,7 @@ def main() -> None:
     forecast_evidence = read_forecast_evidence()
     model_admission = read_model_admission()
     parameter_lifecycle = read_parameter_lifecycle()
+    replay_evidence = read_replay_evidence()
 
     for symbol in all_symbols:
         data = build_symbol(
@@ -536,6 +566,7 @@ def main() -> None:
             forecast_evidence,
             model_admission,
             parameter_lifecycle,
+            replay_evidence,
         )
         terrain_series = read_terrain_series(symbol)
         (TERRAIN_DATA_DIR / f"{symbol}.json").write_text(

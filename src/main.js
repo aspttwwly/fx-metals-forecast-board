@@ -1,4 +1,5 @@
 import { jevStatusLabel, jevReviewView } from "./model-monitor.js?v=20261013-jev-review-v1";
+import { renderReplayEvidence } from "./replay-evidence.js?v=20261014-replay-v1";
 
 const manifestUrl = "/data/manifest.json";
 const visitEndpoint = "/api/visits";
@@ -959,6 +960,7 @@ function renderSummary(data) {
 
   renderTerrainCard(data);
   renderEvidence(data);
+  renderReplayEvidence(data);
   renderJevReview(data);
 }
 
@@ -1040,7 +1042,7 @@ function renderEvidence(data) {
   const coverage = (current.horizons || [])
     .map((row) => `h${row.horizonWeeks} ${row.observations || 0}/${minimum}`)
     .join(" · ");
-  evidence("coverage", `快照 ${current.issuedVintages || 0} 次${coverage ? ` · ${coverage}` : ""}`);
+  evidence("coverage", `原始快照 ${current.issuedVintages || 0} 次${coverage ? ` · ${coverage}` : ""}（未按周去重）`);
 
   const reviewLabels = {
     routine: "常规观察",
@@ -1059,7 +1061,7 @@ function renderEvidence(data) {
   evidence("jevRaw", lifecycle.jevStatus === "SHADOW_EVALUATED" && rawParts.length
     ? rawParts.join(" · ") : jevStatusLabel(lifecycle));
   const threshold = Number(admission.policy?.minimumCurrentObservations) || minimum;
-  evidence("note", `数据截至 ${legacy.sourceDataCutoff || "--"}。历史 yhat_adj 只作旧模型参考；当前完整链按每个期限至少 ${threshold || "--"} 个成熟样本独立准入，未获准入时操作信号强制保持观望。`);
+  evidence("note", `数据截至 ${legacy.sourceDataCutoff || "--"}。历史 yhat_adj 只作旧模型参考；此处当前记录数含同周重复，不能视为独立周样本。去重后的结果见下方“双轨验证结果”。线上准入门槛暂未改变（每期限至少 ${threshold || "--"} 条及其他检验）；未获准入时保持观望，补测不会自动放行。`);
 
   const signedSkill = (value) => {
     if (!Number.isFinite(value)) return "--";
