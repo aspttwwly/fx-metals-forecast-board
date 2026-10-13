@@ -19,7 +19,7 @@ test("recent comparison reports observed metrics rather than a significance clai
   const text = recentEvidence({n: 30, recent: {status: "WATCH", prior: {rmse: .01}, latest: {rmse: .02}, skill_delta: -.2, direction_delta: -.1}});
   assert.ok(text.includes("近期走弱"));
   assert.ok(text.includes("0.01000 → 0.02000"));
-  assert.ok(text.includes("-20.0%"));
+  assert.ok(text.includes("-20.0 个百分点"));
   assert.ok(!text.includes("显著"));
 });
 

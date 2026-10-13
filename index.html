@@ -233,6 +233,7 @@
           </div>
           <h3>历史逐周回放 · 早期反馈，不替代真实前向验证</h3>
           <p class="evidence-card__note" data-replay="historical"></p>
+          <p class="evidence-card__note">这是当前周频政策的回顾性测试，不是当年实盘记录；历史行情缺少逐日版本，不能排除供应商事后修订。回放未结束时，下方“近期”指已完成区间的末尾，不代表当前市场。</p>
           <div class="evidence-table-scroll"><table class="evidence-table">
             <thead><tr><th>期限</th><th>成熟周</th><th>各非重叠组周数</th><th>RMSE</th><th>MAE</th><th>方向命中率</th><th>相对不变价改善</th><th>相对4周漂移改善</th><th>近期是否变差</th></tr></thead>
             <tbody data-replay-table="historical"></tbody>
@@ -247,7 +248,7 @@
           <p class="evidence-card__note">周周预测存在多周期重叠；所有固定间隔组均保留，不挑最佳组，也不称为独立样本。近期比较为最近 13 个成熟周与前 13 周，基准改善或方向命中率下降至少 10 个百分点提示观察，不代表统计显著恶化。</p>
           <details class="replay-methods"><summary>查看取样规则、GMMA 与滚动输出诊断</summary>
             <p class="evidence-card__note" data-replay="protocol"></p>
-            <p class="evidence-card__note">真实留存仅选完整周五之后、下一个周五之前该预测周最早发出的合格快照；不回填、不重复计数。历史回放主指标评价当时 decision 预测，滚动 FinalForecast 单独如下。GMMA 只过滤执行方向和仓位，不改变价格；过滤后方向命中率分母仅为保留的方向信号，不能直接与全样本命中率比较，也不是交易收益率。</p>
+            <p class="evidence-card__note">真实留存仅选完整周五之后、下一个周五之前该预测周最早发出的合格快照；不回填、不重复计数。期限按预测锚点计名义周数，真实发出时点可能更晚，不能将两套证据混合统计。历史回放主指标评价当时 decision 预测，滚动 FinalForecast 单独如下。GMMA 只过滤执行方向和仓位，不改变价格；过滤后方向命中率分母仅为保留的方向信号，不能直接与全样本命中率比较，也不是交易收益率。</p>
             <div class="evidence-table-scroll"><table class="evidence-table">
               <thead><tr><th>期限</th><th>滚动 RMSE</th><th>滚动相对不变价</th><th>GMMA 动作计数</th><th>保留方向 / 成熟周</th><th>保留信号方向命中</th></tr></thead><tbody data-replay-diagnostics></tbody>
             </table></div>

@@ -10,7 +10,8 @@ export function replayPercent(value, signed = false) {
 export function recentEvidence(row) {
   const recent = row.recent || {};
   if (recent.status === "INSUFFICIENT" || !recent.latest) return `待满 26 周（当前 ${row.n || 0}）`;
-  return `${recent.status === "WATCH" ? "近期走弱，需观察" : "未触发走弱阈值"} · RMSE ${replayNumber(recent.prior.rmse)} → ${replayNumber(recent.latest.rmse)} · 相对朴素改善变化 ${replayPercent(recent.skill_delta, true)} · 方向变化 ${replayPercent(recent.direction_delta, true)}`;
+  const points = (value) => typeof value === "number" && Number.isFinite(value) ? `${value > 0 ? "+" : ""}${(value * 100).toFixed(1)} 个百分点` : "--";
+  return `${recent.status === "WATCH" ? "近期走弱，需观察" : "未触发走弱阈值"} · 最新窗口 ${recent.latest.origin_start || "--"}—${recent.latest.origin_end || "--"} · RMSE ${replayNumber(recent.prior.rmse)} → ${replayNumber(recent.latest.rmse)} · 相对朴素改善变化 ${points(recent.skill_delta)} · 方向变化 ${points(recent.direction_delta)}`;
 }
 
 const escape = (text) => String(text ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
