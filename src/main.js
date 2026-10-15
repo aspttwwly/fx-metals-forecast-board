@@ -1067,7 +1067,7 @@ function renderEvidence(data) {
   evidence("jevRaw", lifecycle.jevStatus === "SHADOW_EVALUATED" && rawParts.length
     ? rawParts.join(" · ") : jevStatusLabel(lifecycle));
   const threshold = Number(admission.policy?.minimumCurrentObservations) || minimum;
-  evidence("note", `数据截至 ${legacy.sourceDataCutoff || "--"}。历史 yhat_adj 只作旧模型参考；此处当前记录数含同周重复，不能视为独立周样本。去重后的结果见下方“双轨验证结果”。线上准入门槛暂未改变（每期限至少 ${threshold || "--"} 条及其他检验）；未获准入时保持观望，补测不会自动放行。`);
+  evidence("note", `数据截至 ${admission.sourceDataCutoff || legacy.sourceDataCutoff || "--"}。历史 yhat_adj 只作旧模型参考；新版成熟预测周按每周最早发布版去重，排除旧政策。多周期预测仍有重叠，不能视为独立样本。准入要求每个期限的非重叠最小组至少 ${threshold || "--"} 个成熟预测周，并通过其他检验；未获准入时保持观望，旧版补测不会自动放行。`);
 
   const signedSkill = (value) => {
     if (!Number.isFinite(value)) return "--";

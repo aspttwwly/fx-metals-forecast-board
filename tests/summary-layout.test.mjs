@@ -3,8 +3,17 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+const main = readFileSync(new URL("../src/main.js", import.meta.url), "utf8");
 const sidebar = html.match(/<aside class="summary-panel">([\s\S]*?)<\/aside>/)[1];
 const details = sidebar.match(/<details\b([^>]*)>([\s\S]*?)<\/details>/);
+
+test("fixed-origin evidence labels match weekly deduplication and non-overlap admission", () => {
+  assert.match(html, /新版成熟预测周/);
+  assert.doesNotMatch(html, /当前记录（未去重）/);
+  assert.match(main, /按每周最早发布版去重，排除旧政策/);
+  assert.match(main, /非重叠最小组至少/);
+  assert.doesNotMatch(main, /此处当前记录数含同周重复|线上准入门槛暂未改变/);
+});
 
 test("technical summary details are collapsed by default and remain keyboard accessible", () => {
   assert.ok(details);
