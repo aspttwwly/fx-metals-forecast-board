@@ -1,5 +1,5 @@
 import { jevStatusLabel, jevReviewView } from "./model-monitor.js?v=20261013-jev-review-v1";
-import { renderReplayEvidence } from "./replay-evidence.js?v=20261014-replay-v1";
+import { renderReplayEvidence } from "./replay-evidence.js?v=20261015-fixed-origin-v2";
 
 const manifestUrl = "/data/manifest.json";
 const visitEndpoint = "/api/visits";
@@ -192,7 +192,7 @@ function mean(values) {
 
 function calculateSeriesQuality(series, limit = 52) {
   const comparable = series.filter(
-    (point) => !point.future && isFiniteNumber(point.actual) && isFiniteNumber(point.forecast),
+    (point) => point.evaluationEligible !== false && !point.future && isFiniteNumber(point.actual) && isFiniteNumber(point.forecast),
   );
   const recent = comparable.slice(-limit);
   const absoluteErrors = recent.map((point) => Math.abs(point.actual - point.forecast));
@@ -220,6 +220,12 @@ function calculateSeriesQuality(series, limit = 52) {
 }
 
 function calculateForecastQuality(data) {
+  if (data.forecastScope === "CURRENT_DECISION_CHAIN_AS_ISSUED") {
+    const horizons = data.forecastEvidence?.current?.horizons || [];
+    const h4 = horizons.find((row) => row.horizonWeeks === 4) || {};
+    return { samples: h4.observations || 0, mae: h4.mae ?? null, mape: h4.mape ?? null,
+      rmse: h4.rmse ?? null, coverage: null };
+  }
   return calculateSeriesQuality(data.series, 52);
 }
 
@@ -291,7 +297,7 @@ function renderQuality(data) {
   quality("mae", Number.isFinite(metrics.mae) ? formatNumber(metrics.mae) : "--");
   quality("rmse", Number.isFinite(metrics.rmse) ? formatNumber(metrics.rmse) : "--");
   quality("coverage", Number.isFinite(metrics.coverage) ? formatPercent(metrics.coverage * 100, 0) : "--");
-  quality("note", `${metrics.samples || 0} 个历史重叠样本 / 最近 52 期窗口；参考带为固定规则，非概率区间`);
+  quality("note", `${metrics.samples || 0} 个新版 h4 已成熟预测周；主线为当期预测；参考带未校准，无覆盖率承诺`);
 }
 
 function updateVisitCount(value, scope = "") {
@@ -1040,9 +1046,9 @@ function renderEvidence(data) {
   evidence("governance", admissionStatusLabel(admission.status) || "准入状态未生成");
   const minimum = Number(current.minimumObservationsPerHorizon) || 0;
   const coverage = (current.horizons || [])
-    .map((row) => `h${row.horizonWeeks} ${row.observations || 0}/${minimum}`)
+    .map((row) => `h${row.horizonWeeks} 唯一周 ${row.observations || 0} · 非重叠最小组 ${row.nonoverlapObservations || 0}/${minimum}`)
     .join(" · ");
-  evidence("coverage", `原始快照 ${current.issuedVintages || 0} 次${coverage ? ` · ${coverage}` : ""}（未按周去重）`);
+  evidence("coverage", `当前政策合格 ${current.eligibleUniqueWeeks || 0} 个预测周${coverage ? ` · ${coverage}` : ""}（每周最早发布版，旧版本不计入）`);
 
   const reviewLabels = {
     routine: "常规观察",
@@ -2012,7 +2018,7 @@ function renderTimeTunnel(snapshots, selected) {
   text('[data-atlas-stat="one"]', "历史周数");
   text('[data-atlas-stat="two"]', "未来周数");
   text('[data-atlas-stat="three"]', "历史平均绝对误差");
-  text('[data-atlas-stat="note"]', "白线为历史实际，金线为历史预测；连接线表示已实现误差，未来半透明空间表示预测区间。");
+  text('[data-atlas-stat="note"]', "白线为历史实际，金线为历史预测；连接线表示已实现误差，未来半透明空间表示未经覆盖率校准的参考带。");
   renderAtlasControls(selected.point.date);
 }
 

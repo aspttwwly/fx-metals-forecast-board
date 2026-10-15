@@ -51,7 +51,7 @@ export function renderReplayEvidence(data) {
   const updated = payload.updatedAt ? new Intl.DateTimeFormat("zh-CN", {timeZone: "Asia/Shanghai", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"}).format(new Date(payload.updatedAt)) : "--";
   text("status", `${status[payload.status] || "补测准备中"} · 快照 ${updated}`);
   text("historical", `${status[progress.status] || "准备中"} · 已回放 ${historical.completed_origins || 0}/${historical.planned_origins || 0} 周（含预热 ${historical.warmup_completed || 0}/${payload.warmupWeeks || 0} 周）${progress.origin ? ` · 当前 ${progress.origin}` : ""}`);
-  text("live", `真实快照 ${live.raw_vintages || 0} 次 → 合格 ${live.eligible_unique_weeks || 0} 个预测周；排除未完整周或时点不合格 ${live.excluded_ineligible || 0} 次，同周重复 ${live.duplicate_vintages_not_counted || 0} 次。数据截至 ${live.cutoff || "--"}。`);
+  text("live", `真实快照 ${live.raw_vintages || 0} 次 → 合格 ${live.eligible_unique_weeks || 0} 个预测周；排除旧版本、未完整周或时点不合格 ${live.excluded_ineligible || 0} 次，同周重复 ${live.duplicate_vintages_not_counted || 0} 次。数据截至 ${live.cutoff || "--"}。`);
   text("protocol", `评分起点 ${payload.scoreStart || "--"} 至 ${payload.scoreEnd || "--"}；冻结行情截至 ${payload.cutoff || "--"}。只统计已成熟目标。参数每 13 周重新选择，18/24/36 月窗口、2 个固定 seed、24 轮退火、3 折独立递推特征；每周保存完整链条当时输出。${payload.purpose === "SMOKE_TEST" ? "当前为试跑，不代表正式补测。" : ""}`);
   text("limitations", (payload.limitations || []).join(" "));
   card.querySelector('[data-replay-table="historical"]').innerHTML = evidenceRows(historical.horizons);

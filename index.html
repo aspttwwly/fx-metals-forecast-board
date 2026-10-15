@@ -233,7 +233,7 @@
           </div>
           <h3>历史逐周回放 · 早期反馈，不替代真实前向验证</h3>
           <p class="evidence-card__note" data-replay="historical"></p>
-          <p class="evidence-card__note">这是当前周频政策的回顾性测试，不是当年实盘记录；历史行情缺少逐日版本，不能排除供应商事后修订。回放未结束时，下方“近期”指已完成区间的末尾，不代表当前市场。</p>
+          <p class="evidence-card__note">这是该回放批次冻结代码的回顾性测试；2026-10-15 前的批次属于修复前旧版，不能验证修复后模型，不是当年实盘记录；历史行情缺少逐日版本，不能排除供应商事后修订。回放未结束时，下方“近期”指已完成区间的末尾，不代表当前市场。</p>
           <div class="evidence-table-scroll"><table class="evidence-table">
             <thead><tr><th>期限</th><th>成熟周</th><th>各非重叠组周数</th><th>RMSE</th><th>MAE</th><th>方向命中率</th><th>相对不变价改善</th><th>相对4周漂移改善</th><th>近期是否变差</th></tr></thead>
             <tbody data-replay-table="historical"></tbody>
@@ -408,7 +408,7 @@
               <div><dt>预期变化</dt><dd data-atlas="move">--</dd></div>
               <div><dt>相对质量分</dt><dd data-atlas="confidence">--</dd></div>
               <div><dt>Z 轴不确定性</dt><dd data-atlas="uncertainty">--</dd></div>
-              <div><dt>预测区间</dt><dd data-atlas="range">--</dd></div>
+              <div><dt>参考带（非概率区间）</dt><dd data-atlas="range">--</dd></div>
               <div><dt>空间坐标</dt><dd data-atlas="coordinate">--</dd></div>
             </dl>
             <p class="atlas-focus-note" data-atlas="note">--</p>
@@ -532,6 +532,6 @@
       </form>
     </dialog>
 
-    <script type="module" src="/src/main.js?v=20261014-replay-v1"></script>
+    <script type="module" src="/src/main.js?v=20261015-fixed-origin-v2"></script>
   </body>
 </html>

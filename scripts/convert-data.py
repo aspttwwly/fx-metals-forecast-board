@@ -340,10 +340,13 @@ def read_forecast_evidence() -> dict[str, dict]:
                 "scope": current.get("scope"),
                 "status": current.get("status"),
                 "issuedVintages": current.get("issued_vintages"),
+                "eligibleUniqueWeeks": current.get("eligible_unique_weeks"),
+                "policyVersion": current.get("policy_version"),
+                "samplingRule": current.get("sampling_rule"),
                 "comparableTargetDates": current.get("comparable_target_dates"),
                 "minimumObservationsPerHorizon": current.get("minimum_observations_per_horizon"),
                 "horizons": [
-                    {"horizonWeeks": row.get("horizon_weeks"), "observations": row.get("observations")}
+                    {"horizonWeeks": row.get("horizon_weeks"), "observations": row.get("observations"), "nonoverlapObservations": row.get("nonoverlap_observations"), "rmse": row.get("rmse"), "mae": row.get("mae"), "mape": row.get("mape")}
                     for row in current.get("horizons", [])
                 ],
             },
@@ -367,7 +370,7 @@ def read_replay_evidence() -> dict[str, dict]:
             "updatedAt": payload.get("generated_at_utc"), "purpose": protocol.get("purpose"),
             "cutoff": protocol.get("data_cutoff"), "scoreStart": protocol.get("score_start"),
             "scoreEnd": (protocol.get("origins") or [None])[-1],
-            "warmupWeeks": protocol.get("warmup_weeks"), "limitations": protocol.get("limitations") or [],
+            "warmupWeeks": protocol.get("warmup_weeks"), "limitations": [payload.get("historical_policy_note", ""), *(protocol.get("limitations") or [])],
             "historical": {key: historical.get(key) for key in ("completed_origins", "warmup_completed", "planned_origins", "horizons")},
             "live": row.get("live"),
         }
@@ -507,6 +510,7 @@ def build_symbol(
                 "lower": fmt(low) if low is not None else None,
                 "upper": fmt(high) if high is not None else None,
                 "future": date > latest_actual_date,
+                "evaluationEligible": False,  # h0 is an anchor, not an out-of-sample prediction
             }
         )
 
@@ -517,7 +521,9 @@ def build_symbol(
         "name": NAMES.get(symbol, symbol),
         "group": next(group for group, symbols in GROUPS.items() if symbol in symbols),
         "frequency": "周频",
-        "modelVersion": "Prophet + Terrain v1" if trade_signal else "Prophet annealing v1",
+        "modelVersion": "Prophet fixed-origin weekly v2",
+        "forecastScope": "CURRENT_DECISION_CHAIN_AS_ISSUED",
+        "intervalCalibration": "UNCALIBRATED_REFERENCE_BAND",
         "generatedAt": datetime.now(timezone.utc).date().isoformat(),
         "sourceUpdatedAt": max(history_path.stat().st_mtime, forecast_path.stat().st_mtime),
         "latestActual": {"date": latest_actual_date, "value": fmt(latest_actual_value)},
