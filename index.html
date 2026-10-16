@@ -3,9 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="汇率与贵金属预测观察：周频预测、历史收盘、下载文件。" />
+    <meta name="description" content="汇率与贵金属预测观察：独立周频与月末预测、历史收盘、下载文件。" />
     <title>汇率与贵金属预测观察</title>
-    <link rel="stylesheet" href="/src/styles.css?v=20261014-replay-v1" />
+    <link rel="stylesheet" href="/src/styles.css?v=20261015-versions-v1" />
   </head>
   <body>
     <nav class="view-switcher" aria-label="界面模式">
@@ -23,14 +23,36 @@
 
     <main>
       <section class="masthead observatory-only" aria-labelledby="page-title">
-        <p class="eyebrow">/ WEEKLY FORECAST OBSERVATORY</p>
+        <p class="eyebrow">/ FORECAST OBSERVATORY</p>
         <h1 id="page-title">汇率与贵金属<br /><span>预测观察</span></h1>
         <div class="masthead-meta">
           <span>最新更新时间 <strong data-meta="updated">--</strong></span>
-          <span>数据周期 <strong>周频</strong></span>
+          <span>数据周期 <strong data-meta="frequency">周频</strong></span>
           <span>发布形态 <strong>静态 JSON</strong></span>
           <span>访问量 <strong class="visit-counter" data-visit-count>--</strong></span>
         </div>
+        <form class="forecast-controls" data-frequency-form>
+          <label for="forecast-version">模型版本
+            <select id="forecast-version" data-version><option value="V0.1.1">V0.1.1 · 修复后</option><option value="V0.1.0">V0.1.0 · 原版</option></select>
+          </label>
+          <label for="forecast-frequency">数据频率
+            <select id="forecast-frequency" name="frequency" data-frequency>
+              <option value="weekly">周频</option><option value="monthly">月频（月末价）</option>
+            </select>
+          </label>
+          <label for="forecast-horizon">预测周期
+            <span class="horizon-input"><input id="forecast-horizon" name="horizon" data-horizon type="number" min="1" max="52" step="1" value="13" required /><span data-horizon-unit>周</span></span>
+          </label>
+          <label for="forecast-source">对照来源
+            <select id="forecast-source" data-evidence-source><option value="backtest">历史滚动回测</option><option value="issued">原始发布留存</option></select>
+          </label>
+          <button type="submit">应用</button>
+          <span class="forecast-controls__range" data-horizon-range>1–52 周 · 默认 13 周</span>
+        </form>
+        <p class="version-note" data-version-note></p>
+        <p class="frequency-note" data-frequency-note aria-live="polite"></p>
+        <p class="frequency-note" data-comparison-note aria-live="polite"></p>
+        <p class="frequency-error" data-frequency-error role="alert" hidden></p>
       </section>
 
       <section class="workspace observatory-only" id="data">
@@ -74,8 +96,8 @@
             <div class="chart-wrap">
               <div class="chart-legend" aria-label="图表示意">
                 <span><i class="legend-line legend-actual"></i>实际值</span>
-                <span><i class="legend-line legend-history"></i>历史预测</span>
-                <span><i class="legend-line legend-future"></i>未来预测</span>
+                <span><i class="legend-line legend-history"></i><b data-history-legend>历史预测</b></span>
+                <span><i class="legend-line legend-future"></i><b data-future-legend>未来预测</b></span>
                 <span><i class="legend-band"></i>固定规则参考带</span>
               </div>
               <svg data-chart role="img" aria-label="历史收盘价与模型预测图"></svg>
@@ -147,6 +169,10 @@
               <dt>最近预测点</dt>
               <dd data-summary="forecast">--</dd>
             </div>
+            <div>
+              <dt>所选周期末预测</dt>
+              <dd data-summary="selectedEnd">--</dd>
+            </div>
           </dl>
           <div class="direction-card" data-direction-card>
             <span class="triangle"></span>
@@ -175,10 +201,31 @@
               </dl>
             </details>
           </section>
+          <section class="monthly-model" data-monthly-summary hidden aria-label="独立月频模型信息">
+            <h3>/ 独立月频模型</h3>
+            <dl class="summary-list">
+              <div><dt>模型状态</dt><dd>研究阶段 · 未准入</dd></div>
+              <div><dt>训练截止月末</dt><dd data-monthly="trainEnd">--</dd></div>
+              <div><dt>训练月数</dt><dd data-monthly="count">--</dd></div>
+              <div><dt>原始数据截至</dt><dd data-monthly="sourceCutoff">--</dd></div>
+              <div><dt>训练方法</dt><dd>月末价 · 独立 Prophet 趋势</dd></div>
+            </dl>
+            <p class="frequency-note">固定参数初版，无季节项或 Transformer；尚未进行月频独立寻优与正式样本外验证。周频证据不计入本模型。</p>
+          </section>
         </aside>
       </section>
 
       <section class="below-grid observatory-only">
+        <section class="evidence-card versioned-replay-card" data-versioned-replay hidden aria-label="当前版本历史滚动回测">
+          <div class="evidence-card__head"><div><span data-versioned-label>/ WALK-FORWARD · V0.1.1</span><h2>逐期寻优 · 历史预测与实际</h2></div><strong data-versioned-status></strong></div>
+          <p class="evidence-card__note" data-versioned-method></p>
+          <div class="evidence-table-scroll"><table class="evidence-table">
+            <thead><tr><th>期限</th><th>成熟目标</th><th>非重叠组样本范围</th><th>MAPE</th><th>RMSE</th><th>MAE</th><th>方向命中率</th><th>相对不变价改善</th><th>相对4期漂移改善</th><th>近期观察</th></tr></thead>
+            <tbody data-versioned-metrics></tbody>
+          </table></div>
+          <p class="evidence-card__note">误差按固定预测期限逐项计算，不把不同期限混合。改善 = 1 − 模型 RMSE / 基准 RMSE；正值优于基准。方向按预测与实际相对起点价格的涨跌符号匹配（含同为持平）。重叠目标并非独立样本；近期比较仅为描述性观察。</p>
+          <p class="evidence-card__note">这是真实历史价格上的事后重算，不是当年实盘发布记录；历史供应商数据可能有事后修订。每期参数只使用当时已知数据选择，回测结果不会补成“真实发布留存”或自动开放交易准入。</p>
+        </section>
         <section class="terrain-card" data-terrain-card aria-label="等高线地形过滤状态">
           <div class="terrain-card__head">
             <div>
@@ -280,7 +327,7 @@
         <div class="table-panel">
           <div class="section-title">
             <span class="square hatched"></span>
-            <h2>最近数据</h2>
+            <h2>预测与实际对照 · 所选期限</h2>
           </div>
           <div class="table-scroll">
             <table>
@@ -289,8 +336,8 @@
                   <th>日期</th>
                   <th>实际收盘</th>
                   <th>模型预测</th>
-                  <th>参考带下沿</th>
-                  <th>参考带上沿</th>
+                  <th>预测 − 实际</th>
+                  <th>预测起点 / 来源</th>
                 </tr>
               </thead>
               <tbody data-table></tbody>
@@ -305,6 +352,8 @@
           </div>
           <a class="download-link" data-download="forecast" href="#">预测文件</a>
           <a class="download-link" data-download="history" href="#">历史收盘文件</a>
+          <a class="download-link" data-download="comparison" href="#">预测与实际对照 CSV</a>
+          <a class="download-link" data-download="originalWeekly" href="#">原周频 13 周 Excel</a>
           <a class="download-link" data-download="terrain" href="#">地形状态文件</a>
           <a class="download-link" data-download="tradeSignals" href="#">交易信号文件</a>
           <div class="investment-note">
@@ -532,6 +581,6 @@
       </form>
     </dialog>
 
-    <script type="module" src="/src/main.js?v=20261015-fixed-origin-v3"></script>
+    <script type="module" src="/src/main.js?v=20261015-versions-v1"></script>
   </body>
 </html>

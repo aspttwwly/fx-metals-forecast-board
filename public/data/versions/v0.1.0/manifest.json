@@ -1,0 +1,18 @@
+{
+  "version": "V0.1.0",
+  "sourceCommit": "d077c2823e014f65db160fd6af96edf37d69dee2",
+  "snapshotDate": "2026-10-14",
+  "sha256": {
+    "USDCNH": "1482a798450fef968585fe3c4314a6382205b8e5d32c943d1664889f34b35fd6",
+    "EURCNH": "5f7387fe406606ec0ecd245601eb17b6fdb63250f9ea41d37dc8dd9eebb305a8",
+    "GBPCNH": "fb1362ed699c3064b9d7e552d3d16e3f165d9af654b22c6566d19f8d1070abf4",
+    "AUDCNH": "4042d831c297d157b05c85771c61f2fefa34f790e402cdb3489bb65b96b3759c",
+    "EURUSD": "2f5f8971ffea05358eaacec2bdc72d280340fa24df801720dba903f6724d8457",
+    "GBPUSD": "ea1d887cfab26515d6ebe3f0b25918b2bf40b4355b2cfea16c189eea90a7af96",
+    "AUDUSD": "ad95cfb2dde277790d1f3175b086378cc84228ccddbb917257b8613999947561",
+    "USDJPY": "93b814c25e50d3d66026d435a5cda939aebe55be7a78189c4ceee1cddf1529ef",
+    "USDCHF": "758c6f1c4cdd6a9584c76af3d49fb4f4777704bc78749bc9ec9bb1453952cf97",
+    "XAUUSD": "89a1e8e766858e9aa5ec2eb164fc1adf0446a9bd8d3ed48bea9495775f02b2b9"
+  },
+  "note": "修复前最后发布版本，原始JSON逐字节保留；包括原有时间边界问题，仅供旧版追溯。"
+}

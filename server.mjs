@@ -2,10 +2,12 @@ import { createServer } from "node:http";
 import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { consumerAssetPath } from "./worker/index.js";
 
-const root = fileURLToPath(new URL(".", import.meta.url));
+const projectRoot = fileURLToPath(new URL(".", import.meta.url));
+const root = process.env.FX_PREVIEW_DIST === "1" ? join(projectRoot, "dist") : projectRoot;
 const publicRoot = join(root, "public");
-const runtimeRoot = join(root, ".runtime");
+const runtimeRoot = join(projectRoot, ".runtime");
 const visitsFile = join(runtimeRoot, "visits.json");
 const port = Number(process.env.PORT || 4173);
 
@@ -126,6 +128,21 @@ async function handleVisitRequest(req, res) {
 
 createServer(async (req, res) => {
   if (await handleVisitRequest(req, res)) return;
+
+  const requestUrl = new URL(req.url || "/", "http://127.0.0.1");
+  if (requestUrl.pathname.startsWith("/api/v1/")) {
+    const assetPath = consumerAssetPath(requestUrl.pathname);
+    const methodAllowed = req.method === "GET" || req.method === "HEAD";
+    const candidate = assetPath && !requestUrl.search ? resolveFile(assetPath) : null;
+    const available = candidate && extname(candidate) === ".json";
+    const status = !methodAllowed ? 405 : available ? 200 : 404;
+    res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff", ...(!methodAllowed ? { Allow: "GET, HEAD" } : {}) });
+    if (req.method === "HEAD") res.end();
+    else if (status === 200) createReadStream(candidate).pipe(res);
+    else res.end(JSON.stringify({ error: status === 405 ? "Method not allowed" : "Forecast generation is not available" }));
+    return;
+  }
 
   const file = resolveFile(req.url || "/");
   const type = types[extname(file)] || "application/octet-stream";

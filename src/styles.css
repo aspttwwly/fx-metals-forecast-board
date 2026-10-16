@@ -3953,3 +3953,41 @@ body.is-terrain-splitting * {
 .replay-methods { margin-top: 14px; padding-top: 12px; border-top: 1px solid #aaa; }
 .replay-methods summary { cursor: pointer; font-weight: 700; font-size: 13px; }
 .replay-methods a { display: inline-block; margin-top: 12px; color: inherit; font-size: 12px; }
+/* Forecast controls affect Observatory; protected terrain/3D remain weekly. */
+.forecast-controls { display:flex; flex-wrap:wrap; align-items:end; gap:14px; margin-top:20px; }
+.forecast-controls label { display:grid; gap:6px; font-weight:700; font-size:13px; }
+.forecast-controls select, .forecast-controls input, .forecast-controls button {
+  font:inherit; color:inherit; background:#fff; border:2px solid #242424; border-radius:0; min-height:42px;
+}
+.forecast-controls select { padding:8px 32px 8px 10px; }
+.forecast-controls input { width:92px; padding:8px; }
+.forecast-controls button { padding:8px 22px; cursor:pointer; box-shadow:3px 3px 0 #242424; }
+.forecast-controls :focus-visible { outline:3px solid #387eff; outline-offset:3px; }
+.horizon-input { display:flex; align-items:center; gap:8px; }
+.forecast-controls__range { padding-bottom:10px; font-size:12px; }
+.frequency-note { max-width:100%; font-size:12px; line-height:1.7; overflow-wrap:anywhere; }
+.frequency-error { padding:12px; border:2px solid #b53a35; color:#9b2222; }
+.download-link[hidden] { display:none !important; }
+body[data-forecast-frequency="monthly"] .observatory-only .model-monitor,
+body[data-forecast-frequency="monthly"] [data-terrain-card],
+body[data-forecast-frequency="monthly"] [data-evidence-card],
+body[data-forecast-frequency="monthly"] [data-replay-card],
+body[data-forecast-frequency="monthly"] .jev-review-card,
+body[data-forecast-frequency="monthly"] .chart-legend span:has(.legend-band) { display:none !important; }
+body[data-forecast-unavailable="true"] .chart-stage,
+body[data-forecast-unavailable="true"] .summary-panel,
+body[data-forecast-unavailable="true"] .below-grid { display:none !important; }
+.version-note { border-left:4px solid #1769ff; padding:10px 14px; font-size:13px; line-height:1.7; background:#fff; }
+.chart-legend b { font-weight:400; }
+.observatory-only .forecast-line { stroke:#b45508; stroke-dasharray:7 4; }
+.observatory-only .legend-history { border-color:#b45508; }
+.versioned-replay-card[hidden] { display:none; }
+.versioned-replay-card { grid-column:1/-1; border-left:5px solid #1769ff; }
+.versioned-replay-card table { min-width:1120px; }
+.versioned-replay-card .selected-horizon { background:#eaf1ff; font-weight:700; }
+.observatory-only .table-scroll { max-height:520px; overflow:auto; }
+body[data-evidence-mode="backtest"] .observatory-only .model-monitor,
+body[data-evidence-mode="legacy"] .observatory-only .model-monitor,
+body[data-evidence-mode="backtest"] :is([data-terrain-card],[data-evidence-card],[data-replay-card],.jev-review-card),
+body[data-evidence-mode="legacy"] :is([data-terrain-card],[data-evidence-card],[data-replay-card],.jev-review-card),
+body[data-evidence-mode="backtest"] .chart-legend span:has(.legend-band) { display:none !important; }

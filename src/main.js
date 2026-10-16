@@ -1,5 +1,7 @@
 import { jevStatusLabel, jevReviewView } from "./model-monitor.js?v=20261013-jev-review-v1";
 import { renderReplayEvidence } from "./replay-evidence.js?v=20261015-fixed-origin-v2";
+import { FREQUENCIES, validateHorizon, forecastCsv } from "./forecast-frequency.js?v=20261015-versions-v1";
+import { VERSION_NOTES, versionedView, comparisonCsv, recentComparison } from "./forecast-versions.js?v=20261015-versions-v1";
 
 const manifestUrl = "/data/manifest.json";
 const visitEndpoint = "/api/visits";
@@ -11,6 +13,13 @@ const atlasModePreferenceKey = "fxForecastBoard.atlasMode.v1";
 const state = {
   manifest: null,
   data: null,
+  displayData: null,
+  legacyData: null,
+  version: "V0.1.1",
+  evidenceMode: "backtest",
+  frequency: "weekly",
+  horizon: 13,
+  downloadUrls: [],
   symbol: null,
   pinnedSymbol: null,
   requestId: 0,
@@ -290,6 +299,27 @@ function buildAtlasBaseline(data) {
 }
 
 function renderQuality(data) {
+  if (data.appVersion) {
+    const metrics=data.qualityMetrics || {};
+    quality('grade',data.qualityLabel || '待验证');
+    quality('mape',Number.isFinite(metrics.mape)?formatPercent(metrics.mape*100,2):'--');
+    quality('mae',Number.isFinite(metrics.mae)?formatNumber(metrics.mae):'--');
+    quality('rmse',Number.isFinite(metrics.rmse)?formatNumber(metrics.rmse):'--');
+    quality('coverage','未校准');
+    const unit=data.frequencyKey==='monthly'?'个月':'周';
+    quality('note',`${data.appVersion} · ${data.evidenceMode==='legacy'?'原版混合期限留存，不评分':`${data.selectedHorizon}${unit} · ${metrics.n||0} 个成熟目标 · ${data.qualityLabel}`}；不用于自动准入`);
+    return;
+  }
+  if (data.frequencyKey === "monthly") {
+    const row = data.evidence?.horizons?.find(item => item.horizonMonths === data.selectedHorizon) || {};
+    quality("grade", "月频研究");
+    quality("mape", Number.isFinite(row.mape) ? formatPercent(row.mape * 100, 2) : "--");
+    quality("mae", Number.isFinite(row.mae) ? formatNumber(row.mae) : "--");
+    quality("rmse", Number.isFinite(row.rmse) ? formatNumber(row.rmse) : "--");
+    quality("coverage", "未估计");
+    quality("note", `独立月频 h${data.selectedHorizon} · ${row.observations || 0} 个成熟预测月；多月结果可能重叠，未作准入验证`);
+    return;
+  }
   const metrics = calculateForecastQuality(data);
 
   quality("grade", qualityGrade(metrics));
@@ -297,7 +327,7 @@ function renderQuality(data) {
   quality("mae", Number.isFinite(metrics.mae) ? formatNumber(metrics.mae) : "--");
   quality("rmse", Number.isFinite(metrics.rmse) ? formatNumber(metrics.rmse) : "--");
   quality("coverage", Number.isFinite(metrics.coverage) ? formatPercent(metrics.coverage * 100, 0) : "--");
-  quality("note", `${metrics.samples || 0} 个新版 h4 已成熟预测周；主线为当期预测；参考带未校准，无覆盖率承诺`);
+  quality("note", `${metrics.samples || 0} 个新版 h4 已成熟预测周；主线为当期预测；参考带未校准，无覆盖率承诺${data.selectedHorizon > 13 ? '；h4 指标不代表 14–52 周' : ''}`);
 }
 
 function updateVisitCount(value, scope = "") {
@@ -702,7 +732,7 @@ function syncZoomUi(series) {
 function extent(series) {
   const values = [];
   series.forEach((point) => {
-    ["actual", "forecast", "lower", "upper"].forEach((key) => {
+    ["actual", "forecast", "historicalForecast", "lower", "upper"].forEach((key) => {
       if (point[key] !== null && point[key] !== undefined) values.push(point[key]);
     });
   });
@@ -714,10 +744,12 @@ function extent(series) {
 }
 
 function linePath(points, x, y, key) {
-  return points
-    .filter((point) => point[key] !== null && point[key] !== undefined)
-    .map((point, index) => `${index === 0 ? "M" : "L"} ${x(point.time).toFixed(2)} ${y(point[key]).toFixed(2)}`)
-    .join(" ");
+  let connected=false;
+  return points.map(point=>{
+    if (!Number.isFinite(point[key])) { connected=false; return ''; }
+    const command=connected?'L':'M'; connected=true;
+    return `${command} ${x(point.time).toFixed(2)} ${y(point[key]).toFixed(2)}`;
+  }).join(' ');
 }
 
 function bandBoundaryPath(points, x, y, key) {
@@ -763,6 +795,8 @@ function axisTicks(min, max, count) {
 }
 
 function renderChart(data) {
+  if (data === state.data) data = state.displayData;
+  if (!data) return;
   const fullSeries = buildDisplaySeries(data);
   const series = zoomSeries(fullSeries);
   syncZoomUi(fullSeries);
@@ -784,7 +818,7 @@ function renderChart(data) {
   const yTicks = axisTicks(yMin, yMax, 4);
   const xTicks = axisTicks(xMin, xMax, width < 500 ? 3 : 5);
   const actualPath = linePath(series, x, y, "actual");
-  const forecastPath = linePath(series, x, y, "forecast");
+  const forecastPath = linePath(series, x, y, "historicalForecast");
   const futurePath = futureForecastPath(series, x, y, latestTime);
   const futureX = Math.max(pad.left, Math.min(pad.left + chartWidth, x(latestTime)));
   const latestActualPoint = series.find((point) => point.date === data.latestActual.date && point.actual !== null);
@@ -836,6 +870,7 @@ function renderChart(data) {
     <path class="forecast-band-edge" d="${bandBoundaryPath(series, x, y, "lower")}"></path>
     <path class="actual-line" d="${actualPath}"></path>
     <path class="forecast-line" d="${forecastPath}"></path>
+    ${series.filter(point=>Number.isFinite(point.historicalForecast)).map(point=>`<circle class="historical-forecast-point" data-target="${point.date}" cx="${x(point.time)}" cy="${y(point.historicalForecast)}" r="3" fill="#c45b18" stroke="#fff" stroke-width="0.8"><title>${point.date} · 历史预测 ${formatNumber(point.historicalForecast)} · 实际 ${formatNumber(point.actual)}</title></circle>`).join('')}
     ${futurePath ? `<path class="future-flow future-flow-shadow" d="${futurePath}" filter="url(#future-glow)"></path>` : ""}
     ${futurePath ? `<path class="future-flow" d="${futurePath}"></path>` : ""}
     ${
@@ -876,7 +911,8 @@ function wireTooltip(series, scale) {
     els.tooltip.innerHTML = `
       <strong>${nearest.date}</strong>
       实际 ${formatNumber(nearest.actual)}<br />
-      预测 ${formatNumber(nearest.forecast)}
+      预测 ${formatNumber(nearest.historicalForecast ?? nearest.forecast)}<br />
+      差值 ${Number.isFinite(nearest.actual) && Number.isFinite(nearest.historicalForecast) ? formatSigned(nearest.historicalForecast-nearest.actual) : '--'}
     `;
     els.tooltip.hidden = false;
     els.tooltip.style.left = `${Math.min(event.clientX - rect.left + 16, rect.width - 180)}px`;
@@ -890,8 +926,7 @@ function wireTooltip(series, scale) {
 
 function renderTable(data) {
   const rows = data.series
-    .filter((point) => point.actual !== null || point.forecast !== null)
-    .slice(-14)
+    .filter((point) => Number.isFinite(point.historicalForecast) || point.date >= data.latestActual.date)
     .reverse();
 
   els.table.innerHTML = rows
@@ -900,9 +935,9 @@ function renderTable(data) {
         <tr>
           <td>${point.date}</td>
           <td>${formatNumber(point.actual)}</td>
-          <td>${formatNumber(point.forecast)}</td>
-          <td>${formatNumber(point.lower)}</td>
-          <td>${formatNumber(point.upper)}</td>
+          <td>${formatNumber(point.historicalForecast ?? point.forecast)}</td>
+          <td>${Number.isFinite(point.actual) && Number.isFinite(point.historicalForecast) ? formatSigned(point.historicalForecast-point.actual) : '--'}</td>
+          <td>${point.predictionOrigin || (point.future?'未来 · 实际值待兑现':data.evidenceMode==='legacy'?'原版混合期限留存':'当期锚点')}</td>
         </tr>
       `,
     )
@@ -923,6 +958,7 @@ function renderSummary(data) {
   field("deviation", formatSigned(data.deviation));
   summary("actual", actual);
   summary("forecast", forecast);
+  summary("selectedEnd", `${data.selectedEnd?.date || "--"} / ${formatNumber(data.selectedEnd?.value)}`);
   summary("version", data.modelVersion);
   summary("generated", generated);
   summary("note", `${data.name}：下一期较最新收盘${data.direction} ${formatSigned(data.deviation)}`);
@@ -2245,19 +2281,113 @@ function toggleAtlasPulse() {
   }, 1700);
 }
 
+function renderSelectedForecast() {
+  if (!state.data) return;
+  const error = document.querySelector("[data-frequency-error]");
+  const spec = {...FREQUENCIES[state.frequency],...(state.version==='V0.1.0'?{max:13}:{})};
+  document.body.dataset.forecastFrequency = state.frequency;
+  document.body.dataset.forecastVersion = state.version;
+  document.body.dataset.evidenceMode = state.evidenceMode;
+  text('[data-version-note]',VERSION_NOTES[state.version]);
+  document.querySelector('[data-evidence-source]').disabled=false;
+  document.querySelector('[data-evidence-source]').value=state.evidenceMode;
+  document.querySelector('[data-evidence-source] option[value="backtest"]').textContent=state.version==='V0.1.0'?'旧版历史重算（回补）':'历史滚动回测';
+  document.querySelector('[data-frequency] option[value="monthly"]').disabled=state.version==='V0.1.0';
+  document.querySelector("[data-frequency]").value = state.frequency;
+  const input = document.querySelector("[data-horizon]");
+  input.value = state.horizon;
+  input.max = spec.max;
+  input.setCustomValidity("");
+  text("[data-horizon-unit]", spec.unit);
+  text("[data-horizon-range]", `1–${spec.max} ${spec.unit} · 默认 ${spec.defaultHorizon} ${spec.unit}`);
+  text('[data-meta="frequency"]', spec.label);
+  try {
+    state.displayData = versionedView(state.data,state.legacyData,state.version,state.frequency,state.horizon,state.evidenceMode);
+    document.body.dataset.forecastUnavailable = "false";
+    error.hidden = true;
+    const selected = state.displayData;
+    document.body.dataset.evidenceMode = selected.evidenceMode;
+    text('[data-comparison-note]',selected.comparisonNote);
+    text('[data-history-legend]',selected.evidenceMode==='backtest'?(state.version==='V0.1.0'?'旧版回补预测':'历史回测预测'):selected.evidenceMode==='legacy'?'原版历史预测':'历史发布预测');
+    text('[data-future-legend]',selected.forecastScope==='WALKFORWARD_RESEARCH_CURRENT'?'未来研究预测':'未来发布预测');
+    renderVersionedMetrics(selected);
+    renderSummary(selected);
+    renderQuality(selected);
+    renderChart(selected);
+    renderTable(selected);
+    document.querySelector("[data-monthly-summary]").hidden = state.frequency !== "monthly";
+    text('[data-monthly="trainEnd"]', selected.trainEnd || "--");
+    text('[data-monthly="count"]', selected.trainingMonths ? `${selected.trainingMonths} 个月` : "--");
+    text('[data-monthly="sourceCutoff"]', selected.displaySourceCutoff || "--");
+    const monthlyNote=document.querySelector('[data-monthly-summary] .frequency-note');
+    monthlyNote.textContent=selected.forecastScope==='WALKFORWARD_RESEARCH_CURRENT'
+      ? '每月独立滚动寻优并立即启用；与历史回测使用同一预测核心。未改变线上参数准入，回测不等于真实发布验证。'
+      : '原月频发布留存：固定参数初版；回测结果不计入真实发布样本。';
+    const training = state.frequency === "monthly"
+      ? `训练月末 ${selected.trainStart}—${selected.trainEnd}（${selected.trainingMonths} 个月）。` : "";
+    text("[data-frequency-note]", `未来 ${state.horizon} ${spec.unit}：${selected.nextForecast.date}—${selected.selectedEnd.date}。${training}${state.version==='V0.1.0'?'':selected.researchNote}${state.frequency === 'monthly' ? ' 三维与地形页面仍为原周频口径。' : ''}`);
+    // Keep existing protected weekly surfaces on state.data; only Observatory changes frequency.
+    document.querySelectorAll("[data-symbol] small").forEach(node => {
+      const symbol = node.closest("[data-symbol]").dataset.symbol;
+      const item = state.manifest.symbols.find(row => row.symbol === symbol);
+      node.textContent = state.frequency === "weekly" && state.version==='V0.1.1' && state.evidenceMode==='issued' ? `${item.group} · ${directionGlyph(item.direction)}` : item.group;
+    });
+    for (const url of state.downloadUrls) URL.revokeObjectURL(url);
+    state.downloadUrls = [];
+    const originalWeekly = document.querySelector('[data-download="originalWeekly"]');
+    originalWeekly.hidden = state.frequency !== "weekly" || state.version!=='V0.1.1' || state.evidenceMode!=='issued';
+    originalWeekly.href = state.data.files.forecast;
+    originalWeekly.download = `${state.data.symbol}_forecast.xlsx`;
+    for (const kind of ["forecast", "history"]) {
+      const url = URL.createObjectURL(new Blob([forecastCsv(selected, kind)], {type:"text/csv;charset=utf-8"}));
+      state.downloadUrls.push(url);
+      const link = document.querySelector(`[data-download="${kind}"]`);
+      link.href = url;
+      link.download = `${selected.symbol}_${state.version}_${state.frequency}_${kind === 'forecast' ? state.horizon : 'history'}.csv`;
+      link.textContent = kind === "forecast" ? `当前 ${state.horizon} ${spec.unit}预测 CSV` : `${spec.label}历史收盘 CSV`;
+    }
+    const comparisonUrl=URL.createObjectURL(new Blob([comparisonCsv(selected)],{type:'text/csv;charset=utf-8'}));
+    state.downloadUrls.push(comparisonUrl);
+    const comparisonLink=document.querySelector('[data-download="comparison"]');
+    comparisonLink.href=comparisonUrl;
+    comparisonLink.download=`${selected.symbol}_${state.version}_${state.frequency}_h${state.horizon}_${selected.evidenceMode}_comparison.csv`;
+  } catch (failure) {
+    state.displayData = null;
+    document.body.dataset.forecastUnavailable = "true";
+    error.textContent = failure.message;
+    error.hidden = false;
+    text('[data-comparison-note]','');
+    text("[data-frequency-note]", `${state.data.symbol} · ${spec.label}数据不可用，请选择其他范围；未混用另一频率的预测。`);
+  }
+}
+
+function renderVersionedMetrics(data) {
+  const visible=data.evidenceMode==='backtest';
+  document.querySelector('[data-versioned-replay]').hidden=!visible;
+  if(!visible) return;
+  const replay=data.replayProgress;
+  text('[data-versioned-label]',`/ WALK-FORWARD · ${data.appVersion}`);
+  text('[data-versioned-status]',replay.status==='COMPLETE'?'本品种已完成':replay.status==='FAILED'?'回测失败 · 仅展示已完成部分':'计算中 · 部分结果');
+  text('[data-versioned-method]',`${data.frequencyKey==='monthly'?'每月':'每周'}重新寻优并即时启用；目标窗口自 ${data.historyStart}，首个成熟目标 ${data.firstTarget||'暂无'}。已完成 ${replay.completed||0}/${replay.total||'--'} 个预测起点（含预热）。图表按当前选定 ${data.selectedHorizon} ${FREQUENCIES[data.frequencyKey].unit} 期限对齐实际值。${data.appVersion==='V0.1.0'?'旧版核心保留原有缺陷；不与新版不同日期范围的总指标直接排名。':''}`);
+  const horizons=[...new Set([...(data.frequencyKey==='monthly'?[1,3,6,12]:data.appVersion==='V0.1.0'?[1,4,8,13]:[1,4,8,13,26,52]),data.selectedHorizon])].sort((a,b)=>a-b);
+  const percent=value=>Number.isFinite(value)?formatPercent(value*100,2):'--';
+  document.querySelector('[data-versioned-metrics]').innerHTML=horizons.map(h=>{
+    const row=replay.metrics?.find(r=>r.horizon===h)||{};
+    return `<tr${h===data.selectedHorizon?' class="selected-horizon"':''}><td>${h} ${FREQUENCIES[data.frequencyKey].unit}</td><td>${row.n||0}</td><td>${(row.nonoverlapRange||[0,0]).join('–')}</td><td>${percent(row.mape)}</td><td>${Number.isFinite(row.rmse)?formatNumber(row.rmse):'--'}</td><td>${Number.isFinite(row.mae)?formatNumber(row.mae):'--'}</td><td>${percent(row.direction)}</td><td>${percent(row.skillNaive)}</td><td>${percent(row.skillDrift)}</td><td>${recentComparison(replay.rows||[],h,data.frequencyKey)}</td></tr>`;
+  }).join('');
+}
+
 async function loadSymbol(symbol, options = {}) {
   const requestId = ++state.requestId;
   if (state.symbol !== symbol) resetTerrainZoom();
   state.symbol = symbol;
   updateActiveInstrument();
-  const data = await fetchJson(`/data/${symbol}.json`);
+  const [data,legacy] = await Promise.all([fetchJson(`/data/${symbol}.json`),fetchJson(`/data/versions/v0.1.0/${symbol}.json`).catch(()=>null)]);
   if (requestId !== state.requestId) return;
   state.data = data;
+  state.legacyData = legacy;
   updateActiveInstrument();
-  renderSummary(state.data);
-  renderQuality(state.data);
-  renderChart(state.data);
-  renderTable(state.data);
+  renderSelectedForecast();
   if (state.view === "constellation" && state.atlasData.size) renderAtlas();
   if (state.view === "terrain") {
     await ensureTerrainSeries(state.data);
@@ -2267,6 +2397,35 @@ async function loadSymbol(symbol, options = {}) {
 }
 
 function bindUi() {
+  document.querySelector('[data-version]').addEventListener('change',event=>{
+    state.version=event.target.value;
+    if(state.version==='V0.1.0') {state.frequency='weekly';state.horizon=13;state.evidenceMode='issued';}
+    else state.evidenceMode='backtest';
+    state.zoomStart=0;state.zoomEnd=100;renderSelectedForecast();
+  });
+  document.querySelector('[data-evidence-source]').addEventListener('change',event=>{
+    state.evidenceMode=event.target.value;
+    state.zoomStart=0;state.zoomEnd=100;renderSelectedForecast();
+  });
+  const frequency = document.querySelector("[data-frequency]");
+  const horizon = document.querySelector("[data-horizon]");
+  frequency.addEventListener("change", () => {
+    state.frequency = frequency.value;
+    state.horizon = FREQUENCIES[state.frequency].defaultHorizon;
+    state.zoomStart = 0; state.zoomEnd = 100;
+    renderSelectedForecast();
+  });
+  horizon.addEventListener("input", () => {
+    try { validateHorizon(state.frequency, horizon.value); horizon.setCustomValidity(""); }
+    catch (failure) { horizon.setCustomValidity(failure.message); }
+  });
+  document.querySelector("[data-frequency-form]").addEventListener("submit", event => {
+    event.preventDefault();
+    try { state.horizon = validateHorizon(state.frequency, horizon.value); }
+    catch (failure) { horizon.setCustomValidity(failure.message); horizon.reportValidity(); return; }
+    state.zoomStart = 0; state.zoomEnd = 100;
+    renderSelectedForecast();
+  });
   document.querySelector("[data-prev]").addEventListener("click", () => pinSymbol(siblingSymbol(-1)));
   document.querySelector("[data-next]").addEventListener("click", () => pinSymbol(siblingSymbol(1)));
   document.querySelector("[data-open-risk]")?.addEventListener("click", () => els.riskDialog.showModal());

@@ -5,6 +5,7 @@ import math
 import os
 import shutil
 import csv
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -47,6 +48,128 @@ FORECAST_EVIDENCE_PATH = FORECAST_PROJECT_DIR / "prophet output" / "monitoring" 
 MODEL_ADMISSION_PATH = FORECAST_PROJECT_DIR / "prophet output" / "monitoring" / "latest_model_admission.json"
 PARAMETER_LIFECYCLE_PATH = FORECAST_PROJECT_DIR / "prophet output" / "monitoring" / "latest_parameter_lifecycle.json"
 REPLAY_EVIDENCE_PATH = FORECAST_PROJECT_DIR / "prophet output" / "monitoring" / "latest_replay_evidence.json"
+LONG_HORIZON_PATH = FORECAST_PROJECT_DIR / "prophet output" / "long_horizon" / "latest.json"
+WALKFORWARD_POINTER_PATH = FORECAST_PROJECT_DIR / "prophet output" / "walkforward_v011" / "latest_run.json"
+LEGACY_BACKFILL_POINTER_PATH = FORECAST_PROJECT_DIR / "prophet output" / "walkforward_v010" / "latest_run.json"
+
+
+def extra_source_paths():
+    paths = set((ROOT / "public/data/versions").rglob("*.json"))
+    paths.update((FORECAST_PROJECT_DIR / "prophet output/snapshots/vintages").glob("*/*.json"))
+    paths.update((FORECAST_PROJECT_DIR / "prophet output/long_horizon/vintages").glob("*.json"))
+    paths.add(FORECAST_PROJECT_DIR / "forecast_protocol.py")
+    if WALKFORWARD_POINTER_PATH.exists():
+        folder = Path(json.loads(WALKFORWARD_POINTER_PATH.read_text(encoding="utf-8"))["runDir"]).resolve()
+        if folder.parent != WALKFORWARD_POINTER_PATH.parent.resolve():
+            raise ValueError("Unexpected walk-forward source directory")
+        paths.update([folder / "protocol.json", folder / "status.json"])
+        paths.update((folder / "results").glob("*/*.json"))
+        paths.update((folder / "progress").glob("*.json"))
+    if LEGACY_BACKFILL_POINTER_PATH.exists():
+        folder = Path(json.loads(LEGACY_BACKFILL_POINTER_PATH.read_text(encoding="utf-8"))["runDir"]).resolve()
+        if folder.parent != LEGACY_BACKFILL_POINTER_PATH.parent.resolve():
+            raise ValueError("Unexpected V0 backfill source directory")
+        paths.add(LEGACY_BACKFILL_POINTER_PATH)
+        paths.update([folder / "protocol.json", folder / "status.json"])
+        paths.update((folder / "results").glob("*/*.json"))
+        paths.update((folder / "progress").glob("*.json"))
+    return paths
+
+
+def read_issued_comparisons(symbol, data):
+    # Reuse the production eligibility rule, not a permissive UI reconstruction.
+    if str(FORECAST_PROJECT_DIR) not in sys.path:
+        sys.path.insert(0, str(FORECAST_PROJECT_DIR))
+    from forecast_protocol import eligible_vintages
+    import pandas as pd
+    folder = FORECAST_PROJECT_DIR / "prophet output/snapshots/vintages"
+    payloads = [json.loads(path.read_text(encoding="utf-8")) for path in sorted(folder.glob(f"*/{symbol}.json"))]
+    selected, _, _ = eligible_vintages(payloads)
+    actuals = {r["date"]:r["actual"] for r in data["series"] if r["actual"] is not None}
+    result = {"weekly":[], "monthly":[]}
+    for origin, record in selected.items():
+        issued = str(pd.Timestamp(record["recorded_at_utc"]).tz_convert("Asia/Shanghai").date())
+        for point in record["forecasts"]:
+            target = str(point["target_date"])[:10]
+            if target in actuals and target > issued and point.get("decision_forecast") is not None:
+                result["weekly"].append({"origin":origin,"target":target,"horizon":point["horizon_weeks"],
+                    "forecast":point["decision_forecast"],"actual":actuals[target],"anchor":record["spot_at_origin"]})
+    archives = [json.loads(path.read_text(encoding="utf-8")) for path in
+                (FORECAST_PROJECT_DIR / "prophet output/long_horizon/vintages").glob("*.json")]
+    for frequency in ("weekly","monthly"):
+        sidecar = data.get("longHorizon",{}).get(frequency,{})
+        actual_map = actuals if frequency=="weekly" else {r["date"]:r["actual"] for r in sidecar.get("series",[]) if r["actual"] is not None}
+        seen = set()
+        for archive in sorted(archives,key=lambda r:r["issuedAt"]):
+            item = archive.get("pairs",{}).get(symbol,{}).get(frequency,{})
+            if not item or item.get("policyVersion") != sidecar.get("policyVersion"):
+                continue
+            origin = item["originDate"]
+            issued = pd.Timestamp(archive["issuedAt"]).tz_convert("Asia/Shanghai").tz_localize(None)
+            next_target = pd.Timestamp(origin)+(pd.offsets.MonthEnd(1) if frequency=="monthly" else pd.Timedelta(weeks=1))
+            if origin in seen or not pd.Timestamp(origin)<issued<next_target:
+                continue
+            seen.add(origin)
+            for point in item.get("series",[]):
+                h=point.get("horizon") or 0
+                if h<(1 if frequency=="monthly" else 14) or point["date"] not in actual_map:
+                    continue
+                result[frequency].append({"origin":origin,"target":point["date"],"horizon":h,"forecast":point["forecast"],
+                    "actual":actual_map[point["date"]],"anchor":actual_map.get(origin)})
+    return result
+
+
+def read_legacy_backfill(symbol):
+    if not LEGACY_BACKFILL_POINTER_PATH.exists():
+        return None
+    folder = Path(json.loads(LEGACY_BACKFILL_POINTER_PATH.read_text(encoding="utf-8"))["runDir"]).resolve()
+    if folder.parent != LEGACY_BACKFILL_POINTER_PATH.parent.resolve():
+        raise ValueError("Unexpected V0 backfill source directory")
+    protocol = json.loads((folder / "protocol.json").read_text(encoding="utf-8"))
+    if protocol["version"] != "V0.1.0" or protocol["benchmark"] or protocol["purpose"] != "V010_BACKFILL":
+        raise ValueError("Refusing benchmark/wrong-version V0 backfill")
+    status = json.loads((folder / "status.json").read_text(encoding="utf-8"))
+    path = folder / "results/weekly" / f"{symbol}.json"
+    progress_path = folder / "progress" / f"{symbol}.json"
+    result = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    progress = json.loads(progress_path.read_text(encoding="utf-8")) if progress_path.exists() else {"status":"QUEUED"}
+    if result and (result["version"] != "V0.1.0" or result["runId"] != folder.name or result["symbol"] != symbol or result["backfill"] != "V0"):
+        raise ValueError("V0 backfill identity mismatch")
+    if any(r.get("version") != "V0.1.0" or r.get("backfill") != "V0" or r["target"] < "2024-01-01" or r["origin"] >= r["target"] or r["selectionCutoff"] > r["origin"] for r in result.get("rows",[])):
+        raise ValueError("Invalid V0 backfill row provenance/cutoff")
+    return {"version":"V0.1.0","backfill":"V0","runId":folder.name,"status":status["status"],
+            "updatedAt":status["updatedAt"],"targetStart":protocol["targetStart"],"cutoff":protocol["data_cutoff"],
+            "limitations":protocol["limitations"],"frequencies":{"weekly":{**result,
+                "status":progress["status"],"completed":result.get("completed",0),
+                "total":len(protocol["origins"]),"currentOrigin":progress.get("origin")}}}
+
+
+def read_versioned_replay(symbol):
+    if not WALKFORWARD_POINTER_PATH.exists():
+        return None
+    pointer = json.loads(WALKFORWARD_POINTER_PATH.read_text(encoding="utf-8"))
+    folder = Path(pointer["runDir"]).resolve()
+    expected = (FORECAST_PROJECT_DIR / "prophet output" / "walkforward_v011").resolve()
+    if folder.parent != expected:
+        raise ValueError("Unexpected walk-forward source directory")
+    protocol = json.loads((folder / "protocol.json").read_text(encoding="utf-8"))
+    if protocol["version"] != "V0.1.1" or protocol["smoke"]:
+        raise ValueError("Refusing smoke/wrong-version replay")
+    status = json.loads((folder / "status.json").read_text(encoding="utf-8"))
+    payload = {"version":"V0.1.1", "runId":folder.name, "status":status["status"],
+               "updatedAt":status["updatedAt"], "targetStart":protocol["targetStart"],
+               "cutoff":protocol["cutoff"], "limitations":protocol["limitations"], "frequencies":{}}
+    for frequency in ("weekly","monthly"):
+        path = folder / "results" / frequency / f"{symbol}.json"
+        progress_path = folder / "progress" / f"{frequency}_{symbol}.json"
+        progress = json.loads(progress_path.read_text(encoding="utf-8")) if progress_path.exists() else {"status":"QUEUED"}
+        result = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        if result and (result["runId"] != folder.name or result["frequency"] != frequency or result["symbol"] != symbol):
+            raise ValueError("Replay identity mismatch")
+        payload["frequencies"][frequency] = {**result, "status":progress["status"],
+            "completed":result.get("completed",0), "total":progress.get("total",result.get("total")),
+            "currentOrigin":progress.get("origin")}
+    return payload
 
 GROUPS = {
     "人民币相关": ["USDCNH", "EURCNH", "GBPCNH", "AUDCNH"],
@@ -476,6 +599,7 @@ def build_symbol(
     model_admission: dict[str, dict],
     parameter_lifecycle: dict[str, dict],
     replay_evidence: dict[str, dict] | None = None,
+    long_horizon: dict | None = None,
 ) -> dict:
     history_path = UPLOAD_DIR / f"{symbol}_diff_0th_diff.xlsx"
     forecast_path = UPLOAD_DIR / f"{symbol}_forecast.xlsx"
@@ -516,7 +640,7 @@ def build_symbol(
 
     trade_signal = build_trade_payload(trade_records.get(symbol))
     terrain = build_terrain_payload(terrain_records.get(symbol))
-    return {
+    result = {
         "symbol": symbol,
         "name": NAMES.get(symbol, symbol),
         "group": next(group for group, symbols in GROUPS.items() if symbol in symbols),
@@ -546,15 +670,36 @@ def build_symbol(
         },
         "series": series,
     }
+    if long_horizon and symbol in long_horizon.get("pairs", {}):
+        research = long_horizon["pairs"][symbol]
+        expected_cutoff = str((model_admission.get(symbol) or {}).get("sourceDataCutoff")
+                              or (model_monitor.get(symbol) or {}).get("sourceDataCutoff") or "")[:10]
+        if (research["weekly"]["originDate"] != latest_actual_date
+                or research.get("sourceDataCutoff") != expected_cutoff):
+            raise ValueError(f"{symbol}: research/production dates disagree; refusing stale overlay")
+        extended = {row["date"]: row["forecast"] for row in research["weekly"]["series"]}
+        for date, value in forecast:
+            if date >= latest_actual_date and fmt(extended.get(date)) != fmt(value):
+                raise ValueError(f"{symbol}: research prefix differs from current production")
+        result["longHorizon"] = {**research, "issuedAt": long_horizon["issuedAt"], "runId": long_horizon["runId"]}
+    result["appVersion"] = "V0.1.1"
+    result["walkforward"] = read_versioned_replay(symbol)
+    result["legacyBackfill"] = read_legacy_backfill(symbol)
+    result["issuedComparisons"] = read_issued_comparisons(symbol, result)
+    return result
 
 
 def main() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     FILES_DIR.mkdir(parents=True, exist_ok=True)
     TERRAIN_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    archive = ROOT / "public/data/versions"
+    if archive.exists() and (DATA_DIR / "versions").resolve() != archive.resolve():
+        shutil.copytree(archive, DATA_DIR / "versions", dirs_exist_ok=True)
 
     all_symbols = [symbol for symbols in GROUPS.values() for symbol in symbols]
     manifest_symbols = []
+    consumer_symbols = []
     terrain_records = read_records_by_symbol(TERRAIN_SNAPSHOT_PATH)
     trade_records = read_records_by_symbol(TRADE_SIGNAL_PATH)
     model_monitor = read_model_monitor()
@@ -562,6 +707,9 @@ def main() -> None:
     model_admission = read_model_admission()
     parameter_lifecycle = read_parameter_lifecycle()
     replay_evidence = read_replay_evidence()
+    long_horizon = json.loads(LONG_HORIZON_PATH.read_text(encoding="utf-8")) if LONG_HORIZON_PATH.exists() else None
+    if long_horizon and set(long_horizon.get("pairs", {})) != set(all_symbols):
+        raise ValueError("Long-horizon batch must contain all expected instruments")
 
     for symbol in all_symbols:
         data = build_symbol(
@@ -573,6 +721,7 @@ def main() -> None:
             model_admission,
             parameter_lifecycle,
             replay_evidence,
+            long_horizon,
         )
         terrain_series = read_terrain_series(symbol)
         (TERRAIN_DATA_DIR / f"{symbol}.json").write_text(
@@ -581,6 +730,7 @@ def main() -> None:
         )
         updated = datetime.fromtimestamp(data["sourceUpdatedAt"]).isoformat(timespec="seconds")
         data["sourceUpdatedAt"] = updated
+        consumer_symbols.append(data)
         (DATA_DIR / f"{symbol}.json").write_text(
             json.dumps(data, ensure_ascii=False, separators=(",", ":")),
             encoding="utf-8",
@@ -622,6 +772,14 @@ def main() -> None:
         json.dumps(manifest, ensure_ascii=False, separators=(",", ":")),
         encoding="utf-8",
     )
+
+    # Keep the consumer manifest and its immutable objects within the same
+    # public/data staging boundary used by sync-data.py; no separate writer.
+    import importlib.util
+    api_spec = importlib.util.spec_from_file_location("fx_consumer_api", ROOT / "scripts/consumer_api.py")
+    api = importlib.util.module_from_spec(api_spec)
+    api_spec.loader.exec_module(api)
+    api.export_batch(DATA_DIR, FORECAST_PROJECT_DIR, consumer_symbols)
 
     print(f"Wrote {len(all_symbols)} symbols to {DATA_DIR}")
 

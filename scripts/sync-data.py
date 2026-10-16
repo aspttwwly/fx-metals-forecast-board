@@ -76,6 +76,8 @@ def freshness(candidate, current):
 
 def source_hashes(module):
     paths = set(module.UPLOAD_DIR.glob('*.xlsx')) | set(module.TERRAIN_FEATURE_DIR.glob('*_terrain_features.csv'))
+    if hasattr(module, 'extra_source_paths'):
+        paths.update(module.extra_source_paths())
     for name, value in vars(module).items():
         if name.endswith('_PATH') and isinstance(value, Path):
             paths.add(value)

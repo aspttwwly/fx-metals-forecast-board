@@ -7,6 +7,35 @@ const PROTECTED_DOWNLOADS = new Set([
   "/data/files/latest_trade_signals.xlsx",
 ]);
 
+// Deliberately no arbitrary asset/file/query resolver and no write API.
+export function consumerAssetPath(pathname) {
+  if (pathname === "/api/v1/manifest.json") return "/data/api-v1/manifest.json";
+  const match = /^\/api\/v1\/data\/([a-f0-9]{64})\.json$/.exec(pathname);
+  return match ? `/data/api-v1/data/${match[1]}.json` : null;
+}
+
+async function handleConsumerApi(request, env, url) {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    const response = json({ error: "Method not allowed" }, 405);
+    response.headers.set("Allow", "GET, HEAD");
+    return response;
+  }
+  const path = consumerAssetPath(url.pathname);
+  if (!path || url.search) return json({ error: "Not found" }, 404);
+  const assetUrl = new URL(path, url.origin);
+  const response = await env.ASSETS.fetch(new Request(assetUrl, { method: request.method }));
+  // ASSETS' SPA fallback must not masquerade as a valid JSON contract.
+  if (response.status !== 200 || !response.headers.get("Content-Type")?.includes("application/json")) {
+    return json({ error: "Forecast generation is not available" }, 404);
+  }
+  const headers = new Headers(response.headers);
+  headers.set("Content-Type", "application/json; charset=utf-8");
+  headers.set("X-Content-Type-Options", "nosniff");
+  headers.set("Cache-Control", url.pathname.endsWith("/manifest.json") ? "no-store" : "public, max-age=31536000, immutable");
+  if (url.pathname.includes("/data/")) headers.set("ETag", `"${url.pathname.split("/").at(-1).slice(0, -5)}"`);
+  return new Response(request.method === "HEAD" ? null : response.body, { status: 200, headers });
+}
+
 function json(payload, status = 200) {
   return new Response(JSON.stringify(payload), {
     status,
@@ -128,6 +157,10 @@ export default {
 
     if (url.pathname === "/api/visits") {
       return handleVisits(request, env);
+    }
+
+    if (url.pathname.startsWith("/api/v1/")) {
+      return handleConsumerApi(request, env, url);
     }
 
     if (url.pathname.startsWith("/api/")) {
