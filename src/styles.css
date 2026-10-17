@@ -1823,6 +1823,13 @@ main {
   line-height: 1.1;
 }
 
+.metric-strip small {
+  display: block;
+  margin-top: 5px;
+  color: var(--soft-ink);
+  font-size: 11px;
+}
+
 .chart-wrap {
   position: relative;
   min-height: 360px;
@@ -1886,15 +1893,15 @@ main {
 .future-flow {
   fill: none;
   stroke: #1769ff;
-  stroke-dasharray: 16 18;
+  stroke-dasharray: none;
   stroke-linecap: round;
   stroke-width: 3.2;
-  animation: futureFlow 1.45s linear infinite;
+  animation: none;
   vector-effect: non-scaling-stroke;
 }
 
 .future-flow-shadow {
-  opacity: 0.58;
+  opacity: 0.18;
   stroke: #5fa8ff;
   stroke-width: 9;
 }
@@ -2086,8 +2093,8 @@ main {
 
 .legend-future {
   border-top-color: #1769ff;
-  box-shadow: 0 0 8px rgba(23, 105, 255, 0.82);
-  animation: futureLegendFlow 1.45s ease-in-out infinite;
+  box-shadow: none;
+  animation: none;
 }
 
 .legend-band {
@@ -3982,6 +3989,8 @@ body[data-forecast-unavailable="true"] .below-grid { display:none !important; }
 .observatory-only .forecast-line { stroke:#b45508; stroke-dasharray:7 4; }
 .observatory-only .legend-history { border-color:#b45508; }
 .versioned-replay-card[hidden] { display:none; }
+.rolling-validation-card[hidden] { display:none; }
+.rolling-validation-card { grid-column:1/-1; border-left:5px solid #1769ff; }
 .versioned-replay-card { grid-column:1/-1; border-left:5px solid #1769ff; }
 .versioned-replay-card table { min-width:1120px; }
 .versioned-replay-card .selected-horizon { background:#eaf1ff; font-weight:700; }
@@ -3991,3 +4000,27 @@ body[data-evidence-mode="legacy"] .observatory-only .model-monitor,
 body[data-evidence-mode="backtest"] :is([data-terrain-card],[data-evidence-card],[data-replay-card],.jev-review-card),
 body[data-evidence-mode="legacy"] :is([data-terrain-card],[data-evidence-card],[data-replay-card],.jev-review-card),
 body[data-evidence-mode="backtest"] .chart-legend span:has(.legend-band) { display:none !important; }
+
+/* The explanation is in normal flow: it cannot cover plotted observations. */
+.chart-context { min-width:0; margin:14px 24px 0; }
+.chart-context .chart-legend {
+  position:static; width:fit-content; max-width:100%; margin-left:auto;
+  box-shadow:none; line-height:1.4;
+}
+.chart-context .chart-legend span { min-width:0; white-space:normal; }
+.chart-context .chart-legend i { flex-shrink:0; }
+.forecast-batch-note { margin:10px 0 0; font-size:12px; line-height:1.65; overflow-wrap:anywhere; }
+.forecast-batch-note strong { display:block; color:var(--ink); }
+.forecast-batch-note span { color:var(--soft-ink); }
+.forecast-batch-boundary line { stroke:#6d7682; stroke-width:1; stroke-dasharray:2 4; vector-effect:non-scaling-stroke; }
+.forecast-batch-boundary rect { fill:var(--paper); stroke:#6d7682; stroke-width:1; }
+.forecast-batch-boundary text { fill:var(--ink); font-size:11px; }
+.forecast-batch-anchor { fill:none; stroke:#1769ff; stroke-width:1.5; vector-effect:non-scaling-stroke; }
+@media (max-width:600px) {
+  .chart-context { margin:12px 10px 0; }
+  .chart-context .chart-legend { width:100%; margin:0; justify-content:flex-start; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .future-flow, .legend-future, .actual-current-glow { animation:none !important; transition:none !important; }
+  .future-flow-shadow { opacity:0; }
+}

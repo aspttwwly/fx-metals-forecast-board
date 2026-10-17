@@ -89,6 +89,21 @@ def convert(root, staging):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     before = source_hashes(module)
+    if os.getenv('FX_ROLLING_WORKFLOW') == '1':
+        reference = module.FORECAST_PROJECT_DIR / 'prophet output/rolling_reference'
+        paths = list(reference.glob('*.json')) + list((reference / 'vintages').glob('*.json'))
+        paths += list((root / 'public/data').rglob('*.json'))
+        frozen = {path: hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
+        spec = importlib.util.spec_from_file_location('rolling_publication', root / 'scripts/rolling-publication.py')
+        rolling = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(rolling)
+        rolling.compose(root, staging, module)
+        after_paths = list(reference.glob('*.json')) + list((reference / 'vintages').glob('*.json'))
+        after_paths += list((root / 'public/data').rglob('*.json'))
+        if (set(after_paths) != set(frozen) or source_hashes(module) != before
+                or any(hashlib.sha256(path.read_bytes()).hexdigest() != value for path, value in frozen.items())):
+            raise RuntimeError('Inputs changed during rolling publication')
+        return {**before, **{str(path): value for path, value in frozen.items()}}
     module.DATA_DIR = staging
     module.FILES_DIR = staging / 'files'
     module.TERRAIN_DATA_DIR = staging / 'terrain'

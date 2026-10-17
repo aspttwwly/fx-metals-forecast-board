@@ -60,6 +60,12 @@ export function forecastCsv(data, kind = "forecast") {
   const rows = data.series.filter(row => kind === "history" ? row.actual != null : row.future && row.forecast != null);
   const header = ["symbol", "frequency", "date", "horizon", "actual", "forecast", "model_version", "policy_version", "scope", "issued_at", "source_cutoff", "app_version", "evidence_source", "replay_run_id"];
   const quoted = value => `"${String(value ?? "").replaceAll('"','""')}"`;
+  if (data.forecastScope==='ROLLING_REFERENCE_AS_ISSUED') {
+    const lines=rows.map((row,index)=>[data.symbol,spec.label,row.date,kind==='forecast'?index+1:'',
+      row.actual,kind==='forecast'?row.forecast:'',data.modelVersion,data.policyVersion,data.forecastScope,
+      data.sourceUpdatedAt,data.displaySourceCutoff,data.appVersion,'issued','']);
+    return '\ufeff'+[header,...lines].map(row=>row.map(quoted).join(',')).join('\r\n');
+  }
   const replay=data.forecastScope==='WALKFORWARD_RESEARCH_CURRENT';
   const lines = rows.map((row,index) => [data.symbol, spec.label, row.date, kind === "forecast" ? index+1 : "",
     row.actual, kind === "forecast" ? row.forecast : "", data.modelVersion,

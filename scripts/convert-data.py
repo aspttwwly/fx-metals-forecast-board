@@ -3,11 +3,13 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import shutil
 import csv
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import openpyxl
 
@@ -55,6 +57,8 @@ LEGACY_BACKFILL_POINTER_PATH = FORECAST_PROJECT_DIR / "prophet output" / "walkfo
 
 def extra_source_paths():
     paths = set((ROOT / "public/data/versions").rglob("*.json"))
+    paths.update(FORECAST_PROJECT_DIR / "data" / f"{symbol}.xlsx"
+                 for symbols in GROUPS.values() for symbol in symbols)
     paths.update((FORECAST_PROJECT_DIR / "prophet output/snapshots/vintages").glob("*/*.json"))
     paths.update((FORECAST_PROJECT_DIR / "prophet output/long_horizon/vintages").glob("*.json"))
     paths.add(FORECAST_PROJECT_DIR / "forecast_protocol.py")
@@ -207,6 +211,70 @@ def read_two_column_xlsx(path: Path) -> list[tuple[str, float]]:
         rows.append((date, float(raw_value)))
 
     return rows
+
+
+def _daily_calendar_date(value) -> date:
+    """Accept unambiguous calendar labels, never epochs or inferred date formats."""
+    if isinstance(value, datetime):
+        if value.tzinfo is not None or value.time() != datetime.min.time():
+            raise ValueError("DAILY_DATE_INVALID")
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str) and re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}(?:[ T]00:00:00(?:\.0{1,6})?)?", value
+    ):
+        return date.fromisoformat(value[:10])
+    raise ValueError("DAILY_DATE_INVALID")
+
+
+def read_daily_actuals(symbol: str, *, issued_at: datetime | None = None) -> dict:
+    """Read display-only daily closes without changing any forecast/evaluation grain."""
+    if symbol not in {item for symbols in GROUPS.values() for item in symbols}:
+        raise ValueError("DAILY_SYMBOL_INVALID")
+    issue = issued_at if issued_at is not None else datetime.now(timezone.utc)
+    if not isinstance(issue, datetime) or issue.tzinfo is None or issue.utcoffset() is None:
+        raise ValueError("DAILY_ISSUE_TIME_INVALID")
+    issue_date = issue.astimezone(ZoneInfo("Asia/Shanghai")).date()
+    path = FORECAST_PROJECT_DIR / "data" / f"{symbol}.xlsx"
+    if not path.is_file():
+        raise ValueError(f"{symbol}: DAILY_SOURCE_MISSING")
+    workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    values = {}
+    try:
+        sheet = workbook[workbook.sheetnames[0]]
+        records = sheet.iter_rows(values_only=True)
+        header = next(records, ())
+        if header.count("Date") != 1 or header.count("Close") != 1:
+            raise ValueError(f"{symbol}: DAILY_COLUMNS_INVALID")
+        date_index, close_index = header.index("Date"), header.index("Close")
+        for row_number, row in enumerate(records, start=2):
+            if all(value is None for value in row):
+                continue
+            try:
+                day = _daily_calendar_date(row[date_index])
+            except (ValueError, TypeError, IndexError) as exc:
+                raise ValueError(f"{symbol}: DAILY_DATE_INVALID row={row_number}") from exc
+            if day in values:
+                raise ValueError(f"{symbol}: DAILY_DATE_DUPLICATE row={row_number}")
+            close = row[close_index]
+            if isinstance(close, bool) or not isinstance(close, (int, float)) or not math.isfinite(close) or close <= 0:
+                raise ValueError(f"{symbol}: DAILY_CLOSE_INVALID row={row_number}")
+            values[day] = float(close)
+    finally:
+        workbook.close()
+    if not values:
+        raise ValueError(f"{symbol}: DAILY_SOURCE_EMPTY")
+    rows = [{"date": day.isoformat(), "close": values[day]}
+            for day in sorted(values) if day < issue_date]
+    if not rows:
+        raise ValueError(f"{symbol}: DAILY_NO_COMPLETE_DAY")
+    return {
+        "schema": "fx-daily-actuals/v1", "symbol": symbol, "frequency": "daily",
+        "scope": "DAILY_OBSERVED_DISPLAY_ONLY", "sourceId": f"market-raw/{symbol}",
+        "sourceDataCutoff": rows[-1]["date"], "rawDataCutoff": max(values).isoformat(),
+        "issueDate": issue_date.isoformat(), "latest": dict(rows[-1]), "rows": rows,
+    }
 
 
 def pct_band(symbol: str, value: float) -> float:
@@ -686,6 +754,7 @@ def build_symbol(
     result["walkforward"] = read_versioned_replay(symbol)
     result["legacyBackfill"] = read_legacy_backfill(symbol)
     result["issuedComparisons"] = read_issued_comparisons(symbol, result)
+    result["dailyActuals"] = read_daily_actuals(symbol)
     return result
 
 

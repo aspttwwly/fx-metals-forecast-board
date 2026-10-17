@@ -1,4 +1,4 @@
-import importlib.util,json,pathlib,subprocess,unittest,uuid
+import importlib.util,json,pathlib,subprocess,tempfile,unittest,uuid
 from unittest.mock import patch
 ROOT=pathlib.Path(__file__).resolve().parent
 SCRIPT=ROOT/'sync-data.py' if (ROOT/'sync-data.py').is_file() else ROOT.parent/'scripts/sync-data.py'
@@ -10,9 +10,20 @@ def run(root,*args):
 def data(date):
  return {'updatedAt':date+'T20:30:00','symbols':[{'symbol':'EURUSD','latestActual':{'date':date}}]}
 
+def cleanup_fixture(directory,fixture_root):
+ target=pathlib.Path(directory.name).resolve()
+ if target.parent!=fixture_root or target==fixture_root:
+  raise RuntimeError('Refusing fixture cleanup outside its dedicated root')
+ directory.cleanup()
+
 class SyncTests(unittest.TestCase):
  def setUp(self):
-  self.root=SCRIPT.parent.parent/'.runtime/sync-test-fixtures'/uuid.uuid4().hex;self.root.mkdir(parents=True)
+  fixture_root=(SCRIPT.parent.parent/'.runtime/sync-test-fixtures').resolve()
+  fixture_root.mkdir(parents=True,exist_ok=True)
+  directory=tempfile.TemporaryDirectory(prefix='case-',dir=fixture_root)
+  self.addCleanup(cleanup_fixture,directory,fixture_root)
+  self.root=pathlib.Path(directory.name).resolve()
+  self.assertEqual(self.root.parent,fixture_root)
   self.origin=self.root/'remote.git';run(self.root,'init','--bare',str(self.origin))
   self.repo=self.root/'work';run(self.root,'clone',str(self.origin),str(self.repo))
   run(self.repo,'checkout','-b','main');run(self.repo,'config','user.email','fixture@example.invalid');run(self.repo,'config','user.name','Fixture')
