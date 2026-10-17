@@ -130,6 +130,14 @@ def compose(root, staging, converter):
         api_documents[(doc["symbol"], doc["frequency"], doc["modelVersion"], doc["forecastScope"])] = doc
     new_docs = []
     batches = {}
+    formal_history = {"weekly": {}, "monthly": {}}
+    for archived_path in sorted((rolling / "vintages").glob("*.json")):
+        archived = read(archived_path)
+        if (archived.get("status") == "ISSUED_REFERENCE" and archived.get("modelVersion") == "V0.1.2"
+                and archived.get("policyVersion") == "rolling_reference_mae3_v1_20261018"):
+            for symbol, item in archived["pairs"].items():
+                formal_history[archived["frequency"]].setdefault(symbol, []).append(
+                    {"date": item["data"]["originDate"], "actual": item["path"][0]["anchor"]})
     symbols = [item["symbol"] for item in manifest["symbols"]]
     if len(set(symbols)) != len(symbols):
         raise ValueError("Duplicate public instrument")
@@ -164,6 +172,9 @@ def compose(root, staging, converter):
                 "sourceDataCutoff": item["data"]["rawDataCutoff"], "latestActual": doc["latestActual"],
                 "selection": {**item["selection"], "selectedBaselineLabel": doc["baselineComparison"]},
                 "trainingMonths": item["parameters"]["window"],
+                "issuedActuals": formal_history[frequency].get(symbol, []),
+                "issuedComparisons": item.get("issuedComparisons", []),
+                "qualityByHorizon": doc["qualityByHorizon"],
                 "series": [{"date": point["target"], "horizon": point["horizon"], "forecast": point["forecast"],
                             "actual": point["anchor"] if point["horizon"] == 0 else None,
                             "future": point["horizon"] > 0, "lower": None, "upper": None} for point in item["path"]]}

@@ -15,20 +15,29 @@ export function versionedView(current, legacy, version, frequency, horizon, sour
     const selected=validateHorizon(frequency,horizon);
     const future=batch.series.filter(row=>row.horizon>0).slice(0,selected).map(row=>({...row}));
     if (future.length!==selected) throw new Error('独立滚动批次的预测期限不完整');
-    const history=(frequency==='monthly'?current.longHorizon?.monthly?.series:current.series)||[];
-    const series=history.filter(row=>row.date>='2025-01-01' && row.date<batch.latestActual.date && Number.isFinite(row.actual))
+    const history=new Map(((frequency==='monthly'?current.longHorizon?.monthly?.series:current.series)||[]).map(row=>[row.date,row]));
+    for(const row of batch.issuedActuals||[]) history.set(row.date,row);
+    const series=[...history.values()].filter(row=>row.date>='2025-01-01' && row.date<batch.latestActual.date && Number.isFinite(row.actual))
       .map(row=>({...row,forecast:null,historicalForecast:null,future:false,lower:null,upper:null}));
     series.push({...batch.series[0],historicalForecast:null},...future);
+    const byDate=new Map(series.map(row=>[row.date,row]));
+    const comparisons=(batch.issuedComparisons||[]).filter(row=>row.horizon===comparisonHorizon && row.target<=batch.latestActual.date);
+    for(const row of comparisons) {
+      const point=byDate.get(row.target)||{date:row.target,forecast:null,future:false,lower:null,upper:null};
+      byDate.set(row.target,{...point,actual:row.actual,historicalForecast:row.forecast,
+        predictionOrigin:row.origin,comparisonHorizon,comparisonScope:'AS_ISSUED'});
+    }
+    const quality=batch.qualityByHorizon?.find(row=>row.horizon===comparisonHorizon);
     const deviation=future[0].forecast-batch.latestActual.value;
     return {...current, ...batch, appVersion:version, frequencyKey:frequency,
       frequency:frequency==='monthly'?'月频':'周频', selectedHorizon:selected, comparisonHorizon,
-      latestActual:{...batch.latestActual}, series, nextForecast:{date:future[0].date,value:future[0].forecast},
+      latestActual:{...batch.latestActual}, series:[...byDate.values()].sort((a,b)=>a.date.localeCompare(b.date)), nextForecast:{date:future[0].date,value:future[0].forecast},
       selectedEnd:{date:future.at(-1).date,value:future.at(-1).forecast}, deviation,
       direction:deviation>0?'上行':deviation<0?'下行':'持平',
       sourceUpdatedAt:batch.issuedAt, generatedAt:batch.issuedAt.slice(0,10),
       trainEnd:batch.latestActual.date,
       displaySourceCutoff:batch.sourceDataCutoff, forecastScope:'ROLLING_REFERENCE_AS_ISSUED',
-      evidenceMode:'issued', qualityLabel:'真实发布 · 证据积累中', qualityMetrics:{},
+      evidenceMode:'issued', qualityLabel:'真实发布 · 证据积累中', qualityMetrics:quality?{...quality,n:quality.sampleCount}: {},
       historyStart:'2025-01-01', firstTarget:null, replayProgress:null, replayRunId:null,
       modelMonitor:null, modelAdmission:null, parameterLifecycle:null, forecastEvidence:null,
       replayEvidence:null, terrain:null, tradeSignal:null, files:{},

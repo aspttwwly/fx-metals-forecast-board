@@ -21,6 +21,17 @@ test('rolling display slices the full frozen monthly path and never inherits old
 test('unissued frequency cannot silently borrow the other frequency or version',()=>{
   assert.throws(()=>versionedView(fixture(),null,'V0.1.2','weekly',13),/尚未发行/);
 });
+test('rolling as-issued quality and historical points accumulate within their own horizon',()=>{
+  const base=fixture(), batch=base.rollingReference.monthly;
+  batch.issuedActuals=[{date:'2026-08-31',actual:99}];
+  batch.issuedComparisons=[{origin:'2026-07-31',target:'2026-08-31',horizon:1,actual:99,forecast:98}];
+  batch.qualityByHorizon=[{horizon:1,sampleCount:1,mae:1,rmse:1},{horizon:3,sampleCount:0,mae:null,rmse:null}];
+  const one=versionedView(base,null,'V0.1.2','monthly',3,'issued',1);
+  const three=versionedView(base,null,'V0.1.2','monthly',12,'issued',3);
+  assert.equal(one.qualityMetrics.n,1); assert.equal(three.qualityMetrics.n,0);
+  assert.equal(one.series[0].historicalForecast,98);assert.equal(three.series[0].historicalForecast,null);
+  assert.deepEqual(one.series.filter(r=>r.future),three.series.filter(r=>r.future).slice(0,3));
+});
 test('rolling CSV retains its own frequency issue time and policy at every horizon',()=>{
   const data=versionedView(fixture(),null,'V0.1.2','monthly',12);
   const csv=forecastCsv(data);assert.equal(csv.split('\r\n').length,13);
