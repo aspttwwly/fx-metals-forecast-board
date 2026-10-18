@@ -2636,6 +2636,10 @@ function bindUi() {
 }
 
 async function init() {
+  if (new URLSearchParams(location.search).get("requestAudit") === "1") {
+    const { startRequestAudit } = await import("./request-audit.js?v=20261018-v1");
+    startRequestAudit();
+  }
   state.manifest = await fetchJson(manifestUrl);
   state.view = currentRouteView(false);
   state.atlasMode = currentAtlasMode();
