@@ -1,3 +1,4 @@
+import { writeBrowserDataIndex } from "./browser-data-index.mjs";
 import { cp, mkdir, rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,4 +22,5 @@ await cp(resolve(root, "index.html"), resolve(dist, "index.html"));
 await cp(resolve(root, "src"), resolve(dist, "src"), { recursive: true });
 await cp(resolve(root, "public"), dist, { recursive: true });
 
+await writeBrowserDataIndex(dist);
 console.log(`Built static site to ${dist}`);

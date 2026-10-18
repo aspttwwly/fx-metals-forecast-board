@@ -1,3 +1,4 @@
+import { createDataLoader } from "./data-loader.js?v=20261018-v1";
 import { jevStatusLabel, jevReviewView } from "./model-monitor.js?v=20261013-jev-review-v1";
 import { renderReplayEvidence } from "./replay-evidence.js?v=20261015-fixed-origin-v2";
 import { FREQUENCIES, validateHorizon, forecastCsv } from "./forecast-frequency.js?v=20261015-versions-v1";
@@ -187,11 +188,8 @@ function terrainPage(name, value) {
   });
 }
 
-async function fetchJson(url) {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Unable to fetch ${url}`);
-  return response.json();
-}
+const dataLoader = createDataLoader();
+const fetchJson = (url) => dataLoader.load(url);
 
 function isFiniteNumber(value) {
   return typeof value === "number" && Number.isFinite(value);
@@ -2454,7 +2452,8 @@ async function loadSymbol(symbol, options = {}) {
   updateActiveInstrument();
   const [data,legacy] = await Promise.all([fetchJson(`/data/${symbol}.json`),fetchJson(`/data/versions/v0.1.0/${symbol}.json`).catch(()=>null)]);
   if (requestId !== state.requestId) return;
-  state.data = data;
+  // Terrain attaches its derived series to the view, never to the verified cache.
+  state.data = { ...data };
   state.legacyData = legacy;
   updateActiveInstrument();
   renderSelectedForecast();
