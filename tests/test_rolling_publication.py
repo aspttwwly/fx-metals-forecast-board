@@ -32,6 +32,19 @@ def fixture():
 
 
 class RollingPublicationTests(unittest.TestCase):
+    def test_temporary_reference_preserves_primary_gap_and_anchor_role(self):
+        batch,item=fixture()
+        item['data']['referenceInput']={'schema':'fx-reference-input/v1', 'policy':'audcnh_reciprocal_reference_20261018_v1',
+            'role':'DERIVED_TEMPORARY_REFERENCE','referenceOnly':True,'eligibleForExecution':False,
+            'derivedSessions':['2026-10-30'],'primaryMissingSessions':['2026-10-30'],'inputSha256':'b'*64}
+        doc=publication.consumer_document(batch,item,'AUDCNH')
+        self.assertEqual(doc['latestActual']['valueRole'],'DERIVED_REFERENCE_ANCHOR')
+        self.assertEqual(doc['periodCompletion']['primaryMissingSessions'],['2026-10-30'])
+        self.assertFalse(doc['eligibleForExecution'])
+        with self.assertRaises(ValueError): publication.consumer_document(batch,item,'AUDUSD')
+        item['data']['referenceInput']['eligibleForExecution']=True
+        with self.assertRaises(ValueError): publication.consumer_document(batch,item,'AUDCNH')
+
     def test_contract_keeps_raw_date_independent_of_month_label(self):
         batch,item=fixture();doc=publication.consumer_document(batch,item,'AUDUSD')
         self.assertEqual(doc['sourceDataCutoff'],'2026-10-30')

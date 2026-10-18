@@ -94,6 +94,18 @@ def consumer_document(batch, item, symbol, observations=()):
            "parameterDecision": item["selection"]["decision"],
            "baselineComparison": selected_label,
            "baselineComparisonScope": "FROZEN_PARAMETER_HOLDOUT_REPLAY"}
+    if meta.get('referenceInput'):
+        ref = meta['referenceInput']
+        if (symbol != 'AUDCNH' or ref.get('policy') != 'audcnh_reciprocal_reference_20261018_v1'
+                or ref.get('role') != 'DERIVED_TEMPORARY_REFERENCE' or ref.get('referenceOnly') is not True
+                or ref.get('eligibleForExecution') is not False or ref.get('inputSha256') != meta['rawSha256']
+                or not ref.get('derivedSessions') or not set(ref['derivedSessions']) <= set(ref.get('primaryMissingSessions', []))):
+            raise ValueError('Unapproved reciprocal reference input')
+        doc['referenceInput'] = meta['referenceInput']
+        doc['periodCompletion']['basis'] = 'TEMPORARY_REFERENCE_INPUT'
+        doc['periodCompletion']['primaryMissingSessions'] = meta['referenceInput']['primaryMissingSessions']
+        doc['latestActual']['valueRole'] = ('DERIVED_REFERENCE_ANCHOR'
+            if meta['expectedLastSession'] in meta['referenceInput']['derivedSessions'] else 'PRIMARY')
     for point in doc["forecasts"]:
         if (isinstance(point["forecast"], bool) or not isinstance(point["forecast"], (int, float))
                 or not math.isfinite(point["forecast"]) or point["forecast"] <= 0):
@@ -136,6 +148,8 @@ def compose(root, staging, converter):
         if (archived.get("status") == "ISSUED_REFERENCE" and archived.get("modelVersion") == "V0.1.2"
                 and archived.get("policyVersion") == "rolling_reference_mae3_v1_20261018"):
             for symbol, item in archived["pairs"].items():
+                if item['data']['expectedLastSession'] in item['data'].get('referenceInput', {}).get('derivedSessions', []):
+                    continue  # A reciprocal anchor must not become a historical realised price.
                 formal_history[archived["frequency"]].setdefault(symbol, []).append(
                     {"date": item["data"]["originDate"], "actual": item["path"][0]["anchor"]})
     symbols = [item["symbol"] for item in manifest["symbols"]]
@@ -170,13 +184,14 @@ def compose(root, staging, converter):
             document["rollingReference"][frequency] = {"runId": batch["runId"], "issuedAt": batch["issuedAt"],
                 "modelVersion": batch["modelVersion"], "policyVersion": batch["policyVersion"],
                 "sourceDataCutoff": item["data"]["rawDataCutoff"], "latestActual": doc["latestActual"],
+                "referenceInput": doc.get('referenceInput'),
                 "selection": {**item["selection"], "selectedBaselineLabel": doc["baselineComparison"]},
                 "trainingMonths": item["parameters"]["window"],
                 "issuedActuals": formal_history[frequency].get(symbol, []),
                 "issuedComparisons": item.get("issuedComparisons", []),
                 "qualityByHorizon": doc["qualityByHorizon"],
                 "series": [{"date": point["target"], "horizon": point["horizon"], "forecast": point["forecast"],
-                            "actual": point["anchor"] if point["horizon"] == 0 else None,
+                            "actual": point["anchor"] if point["horizon"] == 0 and doc['latestActual'].get('valueRole') != 'DERIVED_REFERENCE_ANCHOR' else None,
                             "future": point["horizon"] > 0, "lower": None, "upper": None} for point in item["path"]]}
         (staging / f"{symbol}.json").write_bytes(encode(document))
     # Reuse the API generation byte-for-byte on daily-only refreshes. New values

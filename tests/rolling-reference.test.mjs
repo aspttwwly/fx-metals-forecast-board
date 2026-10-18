@@ -39,3 +39,14 @@ test('rolling CSV retains its own frequency issue time and policy at every horiz
   assert.equal((csv.match(/test-rolling/g)||[]).length,12);
   assert.equal((csv.match(/2026-10-01T12:00:00/g)||[]).length,12);
 });
+test('temporary reciprocal is labelled and its anchor is not a realised actual',()=>{
+  const base=fixture(), batch=base.rollingReference.monthly;
+  base.symbol='AUDCNH';
+  batch.referenceInput={label:'临时参考：Alpha Vantage CNHAUD 倒数；AUDCNH 正向行情仍缺测。',derivedSessions:['2026-09-30']};
+  batch.latestActual.valueRole='DERIVED_REFERENCE_ANCHOR';batch.series[0].actual=null;
+  const short=versionedView(base,null,'V0.1.2','monthly',3);
+  const long=versionedView(base,null,'V0.1.2','monthly',12);
+  assert.match(short.comparisonNote,/CNHAUD 倒数/);assert.match(short.comparisonNote,/未获交易执行资格/);
+  assert.match(short.qualityLabel,/临时来源参考/);assert.equal(short.series[0].actual,null);
+  assert.deepEqual(short.series,long.series.slice(0,4));
+});

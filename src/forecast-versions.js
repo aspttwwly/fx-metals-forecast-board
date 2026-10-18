@@ -37,12 +37,12 @@ export function versionedView(current, legacy, version, frequency, horizon, sour
       sourceUpdatedAt:batch.issuedAt, generatedAt:batch.issuedAt.slice(0,10),
       trainEnd:batch.latestActual.date,
       displaySourceCutoff:batch.sourceDataCutoff, forecastScope:'ROLLING_REFERENCE_AS_ISSUED',
-      evidenceMode:'issued', qualityLabel:'真实发布 · 证据积累中', qualityMetrics:quality?{...quality,n:quality.sampleCount}: {},
+      evidenceMode:'issued', qualityLabel:batch.referenceInput?'临时来源参考 · 证据积累中':'真实发布 · 证据积累中', qualityMetrics:quality?{...quality,n:quality.sampleCount}: {},
       historyStart:'2025-01-01', firstTarget:null, replayProgress:null, replayRunId:null,
       modelMonitor:null, modelAdmission:null, parameterLifecycle:null, forecastEvidence:null,
       replayEvidence:null, terrain:null, tradeSignal:null, files:{},
       researchNote:VERSION_NOTES[version],
-      comparisonNote:`本期参数：${batch.selection.decision==='PROMOTE_REFERENCE_ONLY'?'新参数通过验证':'继续使用旧参数'}。${batch.selection.selectedBaselineLabel||batch.selection.baselineLabel||'独立样本不足，尚不能判定是否优于简单基准'}（历史留出区间比较）。正式路径保持原发行值；历史回测不计入本版本真实发布成绩。`};
+      comparisonNote:`${batch.referenceInput?`${batch.referenceInput.label} 涉及日期：${batch.referenceInput.derivedSessions.join('、')}。正向恢复后发布数据修订版，后续计划任务使用新版，当前预测留档不改写。仅供参考，未获交易执行资格。 `:''}本期参数：${batch.selection.decision==='PROMOTE_REFERENCE_ONLY'?'新参数通过验证':'继续使用旧参数'}。${batch.selection.selectedBaselineLabel||batch.selection.baselineLabel||'独立样本不足，尚不能判定是否优于简单基准'}（历史留出区间比较）。正式路径保持原发行值；历史回测不计入本版本真实发布成绩。`};
   }
   if (version === 'V0.1.0') {
     if (!legacy) throw new Error('原版快照不可用，未使用新版数据替代');
