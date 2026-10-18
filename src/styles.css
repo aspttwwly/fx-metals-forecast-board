@@ -4026,3 +4026,23 @@ body[data-evidence-mode="backtest"] .chart-legend span:has(.legend-band) { displ
   .future-flow, .legend-future, .actual-current-glow { animation:none !important; transition:none !important; }
   .future-flow-shadow { opacity:0; }
 }
+
+.method-review-card { grid-column:1/-1; border-left:5px solid #b45508; }
+.method-review-card[hidden] { display:none; }
+.method-review-card h2 { margin:0; font-size:23px; }
+.review-rejected { color:#8b440a; white-space:normal; }
+.review-verdict { padding:12px 16px; background:#fff4e6; line-height:1.8; }
+.review-controls { display:flex; flex-wrap:wrap; gap:12px 24px; align-items:center; margin:20px 0 12px; font-size:13px; }
+.review-controls select { padding:8px; margin-left:8px; border:1px solid #8595a3; background:white; }
+.review-legend { display:flex; flex-wrap:wrap; gap:16px; font-size:13px; }
+.review-legend span::before { content:''; display:inline-block; width:26px; margin-right:8px; border-top:3px solid; vertical-align:middle; }
+.review-actual { color:#172a38; }.review-baseline { color:#1769ff; }.review-candidate { color:#b45508; }
+.review-legend .review-candidate::before { border-top-style:dashed; }
+.review-chart { overflow-x:auto; margin:10px 0; }
+.review-chart svg { display:block; width:100%; min-width:610px; font:18px Arial,sans-serif; fill:#465868; }
+.review-rows { max-height:360px; overflow:auto; }
+.method-review-card summary { cursor:pointer; padding:12px 0; font-weight:600; }
+.method-review-card button { margin:12px 0; padding:8px 12px; background:white; border:1px solid #8595a3; cursor:pointer; }
+
+.method-review-card > .evidence-table-scroll .evidence-table { min-width:520px; width:100%; }
+.method-review-card .review-rows .evidence-table { min-width:620px; }

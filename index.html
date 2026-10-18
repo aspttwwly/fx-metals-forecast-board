@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="汇率与贵金属预测观察：独立周频与月末预测、历史收盘、下载文件。" />
     <title>汇率与贵金属预测观察</title>
-    <link rel="stylesheet" href="/src/styles.css?v=20261018-reference-anchor-v1" />
+    <link rel="stylesheet" href="/src/styles.css?v=20261018-display-v2" />
   </head>
   <body>
     <nav class="view-switcher" aria-label="界面模式">
@@ -33,7 +33,7 @@
         </div>
         <form class="forecast-controls" data-frequency-form>
           <label for="forecast-version">模型版本
-            <select id="forecast-version" data-version><option value="V0.1.1">V0.1.1 · 修复后</option><option value="V0.1.2">V0.1.2 · 独立滚动</option><option value="V0.1.0">V0.1.0 · 原版</option></select>
+            <select id="forecast-version" data-version><option value="V0.1.2" selected>V0.1.2 · 当前参考预测</option><option value="V0.1.1">V0.1.1 · 修复后</option><option value="V0.1.0">V0.1.0 · 原版</option></select>
           </label>
           <label for="forecast-frequency">数据频率
             <select id="forecast-frequency" name="frequency" data-frequency>
@@ -53,6 +53,7 @@
           <span class="forecast-controls__range" data-horizon-range>1–52 周 · 默认 13 周</span>
         </form>
         <p class="version-note" data-version-note></p>
+        <p class="frequency-note">汇率显示5位小数，黄金显示2位；原始计算和下载保留完整精度，换参门槛不受显示四舍五入影响。</p>
         <p class="frequency-note" data-frequency-note aria-live="polite"></p>
         <p class="frequency-note" data-comparison-note aria-live="polite"></p>
         <p class="frequency-note" data-daily-note aria-live="polite"></p>
@@ -231,6 +232,7 @@
       </section>
 
       <section class="below-grid observatory-only">
+        <section class="evidence-card method-review-card" data-method-review hidden aria-label="USDCHF方法历史回放对比"></section>
         <section class="evidence-card rolling-validation-card" data-rolling-validation hidden aria-label="换参历史留出验证">
           <div class="evidence-card__head"><div><span>/ PARAMETER VALIDATION</span><h2>换参验证 · 历史留出</h2></div><strong data-rolling-decision></strong></div>
           <p class="evidence-card__note" data-rolling-validation-note></p>
@@ -606,6 +608,6 @@
       </form>
     </dialog>
 
-    <script type="module" src="/src/main.js?v=20261018-reference-anchor-v1"></script>
+    <script type="module" src="/src/main.js?v=20261018-display-v2"></script>
   </body>
 </html>

@@ -1,4 +1,4 @@
-const indexedPath = /^\/data\/(?:manifest|[A-Z0-9]{3,12}|versions\/v0\.1\.0\/[A-Z0-9]{3,12})\.json$/;
+const indexedPath = /^\/data\/(?:research\/USDCHF-weekly-review|manifest|[A-Z0-9]{3,12}|versions\/v0\.1\.0\/[A-Z0-9]{3,12})\.json$/;
 const hex = (bytes) => Array.from(new Uint8Array(bytes), value => value.toString(16).padStart(2, '0')).join('');
 
 export function createDataLoader({ fetchImpl = (...args) => fetch(...args), now = Date.now,

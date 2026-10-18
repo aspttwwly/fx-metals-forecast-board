@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, access } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 
@@ -10,6 +10,10 @@ export async function writeBrowserDataIndex(dist) {
     if (!/^[A-Z0-9]{3,12}$/.test(symbol)) throw new Error('Invalid public symbol');
     paths.push(`/data/${symbol}.json`, `/data/versions/v0.1.0/${symbol}.json`);
   }
+  try {
+    await access(join(dist, 'data/research/USDCHF-weekly-review.json'));
+    paths.push('/data/research/USDCHF-weekly-review.json');
+  } catch (error) { if (error.code !== 'ENOENT') throw error; }
   const resources = {};
   for (const path of paths.sort()) {
     const bytes = await readFile(join(dist, path.slice(1)));

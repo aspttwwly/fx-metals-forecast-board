@@ -1,3 +1,5 @@
+import { formatPrice } from "./number-policy.js?v=20261018-display-v1";
+import { REVIEW_URL, renderMethodReview } from "./method-review.js?v=20261018-display-v1";
 import { createDataLoader } from "./data-loader.js?v=20261018-v1";
 import { jevStatusLabel, jevReviewView } from "./model-monitor.js?v=20261013-jev-review-v1";
 import { renderReplayEvidence } from "./replay-evidence.js?v=20261015-fixed-origin-v2";
@@ -18,8 +20,8 @@ const state = {
   data: null,
   displayData: null,
   legacyData: null,
-  version: "V0.1.1",
-  evidenceMode: "backtest",
+  version: "V0.1.2",
+  evidenceMode: "issued",
   frequency: "weekly",
   horizon: 13,
   historyHorizon: 13,
@@ -106,13 +108,7 @@ function parseDate(value) {
 }
 
 function formatNumber(value) {
-  if (value === null || value === undefined || Number.isNaN(value)) return "--";
-  const abs = Math.abs(value);
-  const digits = abs >= 100 ? 2 : abs >= 10 ? 4 : 5;
-  return Number(value).toLocaleString("en-US", {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  });
+  return formatPrice(value, state.symbol);
 }
 
 function formatSigned(value) {
@@ -2323,6 +2319,7 @@ function renderSelectedForecast() {
   document.body.dataset.forecastFrequency = state.frequency;
   document.body.dataset.forecastVersion = state.version;
   document.body.dataset.evidenceMode = state.evidenceMode;
+  document.querySelector('[data-version]').value = state.version;
   text('[data-version-note]',VERSION_NOTES[state.version]);
   document.querySelector('[data-evidence-source]').disabled=state.version==='V0.1.2';
   document.querySelector('[data-evidence-source]').value=state.evidenceMode;
@@ -2352,6 +2349,9 @@ function renderSelectedForecast() {
     text('[data-comparison-note]',selected.comparisonNote);
     renderVersionedMetrics(selected);
     renderRollingValidation(selected);
+    const review = document.querySelector('[data-method-review]');
+    review.hidden = selected.symbol !== 'USDCHF' || state.frequency !== 'weekly' || state.version !== 'V0.1.2';
+    if (!review.hidden) renderMethodReview(review, state.methodReview?.value, 13, state.methodReview?.error);
     renderSummary(selected);
     renderQuality(selected);
     renderChart(selected);
@@ -2450,11 +2450,15 @@ async function loadSymbol(symbol, options = {}) {
   if (state.symbol !== symbol) resetTerrainZoom();
   state.symbol = symbol;
   updateActiveInstrument();
-  const [data,legacy] = await Promise.all([fetchJson(`/data/${symbol}.json`),fetchJson(`/data/versions/v0.1.0/${symbol}.json`).catch(()=>null)]);
+  const [data,legacy,review] = await Promise.all([
+    fetchJson(`/data/${symbol}.json`), fetchJson(`/data/versions/v0.1.0/${symbol}.json`).catch(()=>null),
+    symbol === 'USDCHF' ? fetchJson(REVIEW_URL).then(value => ({value})).catch(error => ({error: error.message})) : null,
+  ]);
   if (requestId !== state.requestId) return;
   // Terrain attaches its derived series to the view, never to the verified cache.
   state.data = { ...data };
   state.legacyData = legacy;
+  state.methodReview = review;
   updateActiveInstrument();
   renderSelectedForecast();
   if (state.view === "constellation" && state.atlasData.size) renderAtlas();
