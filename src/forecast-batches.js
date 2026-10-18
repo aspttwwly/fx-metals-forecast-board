@@ -8,7 +8,9 @@ export function forecastBatchPresentation(data) {
   const research = data.forecastScope === 'WALKFORWARD_RESEARCH_CURRENT';
   const origin = data.latestActual.date;
   const anchor = data.series.find(point => point.date === origin);
-  const actualAnchor = !legacy && Number.isFinite(anchor?.actual)
+  const temporaryAnchor = data.latestActual.valueRole === 'DERIVED_REFERENCE_ANCHOR'
+    && data.referenceInput?.derivedSessions?.includes(origin);
+  const actualAnchor = !legacy && !temporaryAnchor && Number.isFinite(anchor?.actual)
     && Number.isFinite(anchor?.forecast)
     // Permit only floating-point arithmetic noise; do not round or rewrite either field.
     && Math.abs(anchor.forecast - anchor.actual) <= 4 * Number.EPSILON * Math.max(1, Math.abs(anchor.actual), Math.abs(anchor.forecast));
@@ -17,24 +19,26 @@ export function forecastBatchPresentation(data) {
   const historySource = data.evidenceMode === 'backtest'
     ? (legacy ? '旧版回补' : '历史回测') : (mixedHistory ? '原版历史' : '历史发布');
   const historyLabel = `${historySource} · ${mixedHistory ? '混合期限' : `h${historyHorizon}`}`;
-  const futureLabel = legacy ? '原版未来留存' : research ? '本期研究预测' : '本期发布预测';
+  const futureLabel = legacy ? '原版未来留存' : research ? '本期研究预测' : data.referenceInput ? '本期临时参考预测' : '本期发布预测';
   const historyDescription = mixedHistory
     ? '历史虚线保留原版混合期限预测，不作为固定期限评分。'
     : `历史虚线：各历史起点的第 ${historyHorizon} ${unit}预测（固定 h=${historyHorizon}），不是同一批路径。`;
   const span = horizon === 1 ? `第 1 ${unit}（h=1）` : `第 1–${horizon} ${unit}（h=1…${horizon}）`;
   const futureDescription = legacy
     ? '未来实线保留原版发布路径及连接点，不改写为实际价。'
-    : `${futureLabel}实线：${origin} 起点的${span}。${actualAnchor
+    : `${futureLabel}实线：${origin} 起点的${span}。${temporaryAnchor
+      ? 'h=0 为 Alpha Vantage CNHAUD 倒数临时起点，并非 AUDCNH 正向实际收盘，不计入实际行情或误差。'
+      : actualAnchor
       ? 'h=0 是已知实际价锚点，不是历史预测，不计入误差。'
       : '连接点沿用该批次原值，不替换历史预测。'}`;
   const emptyHistory = historicalCount ? '' : data.evidenceMode === 'issued'
     ? ' 所选期限暂无成熟真实发布点；不以回测替代。' : ' 所选期限暂无已完成历史预测点。';
   return {
-    origin, actualAnchor, hasFuture: future.length > 0,
+    origin, actualAnchor, temporaryAnchor, hasFuture: future.length > 0,
     anchorValue: Number.isFinite(anchor?.forecast) ? anchor.forecast : null,
     historyLabel, futureLabel,
-    boundaryLabel: legacy ? '原版留存分界' : actualAnchor ? '本期起点 · h0 实际价' : '本期预测分界',
-    heading: legacy ? `原版留存分界 · ${origin}` : `本期预测起点 · ${origin}${actualAnchor ? ' · h=0 实际价锚点' : ''}`,
+    boundaryLabel: legacy ? '原版留存分界' : temporaryAnchor ? '临时倒数起点 · h0' : actualAnchor ? '本期起点 · h0 实际价' : '本期预测分界',
+    heading: legacy ? `原版留存分界 · ${origin}` : temporaryAnchor ? `临时倒数预测起点 · ${origin} · h=0` : `本期预测起点 · ${origin}${actualAnchor ? ' · h=0 实际价锚点' : ''}`,
     description: `${historyDescription}${futureDescription}${emptyHistory}`,
   };
 }

@@ -2,7 +2,7 @@ import { jevStatusLabel, jevReviewView } from "./model-monitor.js?v=20261013-jev
 import { renderReplayEvidence } from "./replay-evidence.js?v=20261015-fixed-origin-v2";
 import { FREQUENCIES, validateHorizon, forecastCsv } from "./forecast-frequency.js?v=20261015-versions-v1";
 import { VERSION_NOTES, versionedView, comparisonCsv, recentComparison } from "./forecast-versions.js?v=20261017-daily-display-v1";
-import { forecastBatchPresentation, forecastBoundaryLayout } from "./forecast-batches.js?v=20261017-daily-display-v1";
+import { forecastBatchPresentation, forecastBoundaryLayout } from "./forecast-batches.js?v=20261018-reference-anchor-v1";
 import { dailyObservation, observedDisplaySeries, dailyActualsCsv } from "./daily-actuals.js?v=20261017-daily-display-v1";
 
 const manifestUrl = "/data/manifest.json";
@@ -936,7 +936,7 @@ function wireTooltip(series, scale, batch) {
       模拟/发行起点 ${nearest.predictionOrigin || '--'} · 提前 ${nearest.comparisonHorizon} ${state.frequency==='monthly'?'个月':'周'}<br />
       历史差值 ${Number.isFinite(nearest.actual) ? formatSigned(nearest.historicalForecast-nearest.actual) : '--'}<br />` : ''}
       ${nearest.future ? `${batch.futureLabel} ${formatNumber(nearest.forecast)}` : nearest.date === batch.origin
-        ? `${batch.actualAnchor ? '本期 h=0 实际价锚点' : '批次连接点'} ${formatNumber(nearest.forecast)}（不计误差）` : ''}
+        ? `${batch.temporaryAnchor ? 'h=0 临时倒数起点（非正向实际价）' : batch.actualAnchor ? '本期 h=0 实际价锚点' : '批次连接点'} ${formatNumber(nearest.forecast)}（不计误差）` : ''}
     `;
     els.tooltip.hidden = false;
     els.tooltip.style.left = `${Math.min(event.clientX - rect.left + 16, rect.width - 180)}px`;
@@ -949,6 +949,7 @@ function wireTooltip(series, scale, batch) {
 }
 
 function renderTable(data) {
+  const batch = forecastBatchPresentation(data);
   const rows = data.series
     .filter((point) => Number.isFinite(point.historicalForecast) || point.date >= data.latestActual.date)
     .reverse();
@@ -961,7 +962,7 @@ function renderTable(data) {
           <td>${formatNumber(point.actual)}</td>
           <td>${formatNumber(point.historicalForecast ?? point.forecast)}</td>
           <td>${Number.isFinite(point.actual) && Number.isFinite(point.historicalForecast) ? formatSigned(point.historicalForecast-point.actual) : '--'}</td>
-          <td>${point.predictionOrigin || (point.future?'未来 · 实际值待兑现':data.evidenceMode==='legacy'?'原版混合期限留存':'当期锚点')}</td>
+          <td>${point.predictionOrigin || (point.future?'未来 · 实际值待兑现':batch.temporaryAnchor && point.date===batch.origin?'临时倒数起点 · CNHAUD 倒数 · 非实际收盘':data.evidenceMode==='legacy'?'原版混合期限留存':'当期锚点')}</td>
         </tr>
       `,
     )
@@ -970,7 +971,9 @@ function renderTable(data) {
 
 function renderSummary(data) {
   const observation = dailyObservation(data);
-  const displayedActual = observation.latest ? {date:observation.latest.date,value:observation.latest.close} : data.latestActual;
+  const batch = forecastBatchPresentation(data);
+  const originLabel = batch.temporaryAnchor ? '临时倒数预测起点' : '预测起点';
+  const displayedActual = observation.latest ? {date:observation.latest.date,value:observation.latest.close} : batch.temporaryAnchor ? {date:'暂无正向实际行情',value:null} : data.latestActual;
   const actual = `${displayedActual.date} / ${formatNumber(displayedActual.value)}`;
   const forecast = `${data.nextForecast.date} / ${formatNumber(data.nextForecast.value)}`;
   const updated = formatDate.format(parseDate(data.sourceUpdatedAt.slice(0, 10)));
@@ -979,20 +982,22 @@ function renderSummary(data) {
 
   field("symbol", `${data.symbol}`);
   field("latestActual", formatNumber(displayedActual.value));
-  text('[data-actual-label]', observation.available ? '最新日收盘' : '周/月起点实际值');
+  text('[data-actual-label]', observation.available ? '最新日收盘' : batch.temporaryAnchor ? '正向实际行情暂缺' : '周/月起点实际值');
   text('[data-daily-date]', displayedActual.date);
   text('[data-daily-note]', observation.available
-    ? `每日实际行情截至 ${observation.latest.date}；预测起点仍为 ${data.latestActual.date} / ${formatNumber(data.latestActual.value)}。日行情仅作观测，不提前计入周/月误差。${observation.latest.date >= data.nextForecast.date ? ' 本批第1期已到目标日；“未来段”指相对本批起点的预测，不代表重新发出。' : ''}${data.localPreview ? ' 本地预览：预测沿用原公开批次，日行情来自本机；尚未发布。' : ''}`
-    : '当前制品尚未接入日行情；图中仍为周/月实际值，不以更新时间冒充行情日期。');
+    ? `每日实际行情截至 ${observation.latest.date}；${originLabel}为 ${data.latestActual.date} / ${formatNumber(data.latestActual.value)}。${batch.temporaryAnchor ? '起点由 Alpha Vantage CNHAUD 倒数计算，不属于 AUDCNH 正向实际行情。' : ''}日行情仅作观测，不提前计入周/月误差。${observation.latest.date >= data.nextForecast.date ? ' 本批第1期已到目标日；“未来段”指相对本批起点的预测，不代表重新发出。' : ''}${data.localPreview ? ' 本地预览：预测沿用原公开批次，日行情来自本机；尚未发布。' : ''}`
+    : batch.temporaryAnchor ? '当前制品尚未接入日行情；临时倒数起点不作为正向实际行情展示或评分。' : '当前制品尚未接入日行情；图中仍为周/月实际值，不以更新时间冒充行情日期。');
   field("nextForecast", formatNumber(data.nextForecast.value));
   field("direction", data.direction);
   field("deviation", formatSigned(data.deviation));
   summary("actual", actual);
+  text('[data-origin-label]', originLabel);
+  summary('origin', `${data.latestActual.date} / ${formatNumber(data.latestActual.value)}`);
   summary("forecast", forecast);
   summary("selectedEnd", `${data.selectedEnd?.date || "--"} / ${formatNumber(data.selectedEnd?.value)}`);
   summary("version", data.modelVersion);
   summary("generated", generated);
-  summary("note", `${data.name}：本批第1期较预测起点（${data.latestActual.date}）${data.direction} ${formatSigned(data.deviation)}`);
+  summary("note", `${data.name}：本批第1期较${originLabel}（${data.latestActual.date}）${data.direction} ${formatSigned(data.deviation)}`);
   const lifecycle = data.modelMonitor;
   const parameterLifecycle = data.parameterLifecycle || {};
   monitor("runDate", lifecycle?.forecastRunDate?.slice(0, 10) || "暂无");

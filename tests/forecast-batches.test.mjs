@@ -102,6 +102,28 @@ test('nonmatching or missing h0 is not falsely labeled as known actual price', (
   assert.equal(forecastBatchPresentation(view).anchorValue,null);
 });
 
+test('approved reciprocal anchor stays explicitly temporary without becoming an actual or changing issued values', () => {
+  const view = fixture();
+  view.appVersion='V0.1.2'; view.evidenceMode='issued'; view.forecastScope='ROLLING_REFERENCE_AS_ISSUED';
+  view.latestActual.valueRole='DERIVED_REFERENCE_ANCHOR';
+  view.referenceInput={derivedSessions:[view.latestActual.date]};
+  view.series[0].actual=null; view.series[0].historicalForecast=null;
+  const before=JSON.stringify(view);
+  const result=forecastBatchPresentation(deepFreeze(view));
+  assert.equal(result.temporaryAnchor,true);
+  assert.equal(result.actualAnchor,false);
+  assert.equal(result.anchorValue,view.latestActual.value);
+  assert.match(result.heading,/临时倒数预测起点/);
+  assert.match(result.boundaryLabel,/临时倒数起点/);
+  assert.equal(result.futureLabel,'本期临时参考预测');
+  assert.match(result.description,/Alpha Vantage CNHAUD 倒数/);
+  assert.match(result.description,/并非 AUDCNH 正向实际收盘/);
+  assert.equal(JSON.stringify(view),before);
+  const normal=fixture('monthly',3);
+  assert.equal(forecastBatchPresentation(normal).temporaryAnchor,false);
+  assert.equal(forecastBatchPresentation(normal).actualAnchor,true);
+});
+
 test('monthly h0 arithmetic noise is labeled correctly without rounding or changing source values', () => {
   const view = fixture('monthly',3);
   view.series[0].actual = 157.903;

@@ -3996,6 +3996,8 @@ body[data-forecast-unavailable="true"] .below-grid { display:none !important; }
 .versioned-replay-card .selected-horizon { background:#eaf1ff; font-weight:700; }
 .observatory-only .table-scroll { max-height:520px; overflow:auto; }
 body[data-evidence-mode="backtest"] .observatory-only .model-monitor,
+body[data-forecast-version="V0.1.2"] .observatory-only .model-monitor,
+body[data-forecast-version="V0.1.2"] .observatory-only :is([data-terrain-card],[data-evidence-card],[data-replay-card],.jev-review-card),
 body[data-evidence-mode="legacy"] .observatory-only .model-monitor,
 body[data-evidence-mode="backtest"] :is([data-terrain-card],[data-evidence-card],[data-replay-card],.jev-review-card),
 body[data-evidence-mode="legacy"] :is([data-terrain-card],[data-evidence-card],[data-replay-card],.jev-review-card),
