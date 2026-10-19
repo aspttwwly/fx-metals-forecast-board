@@ -1,4 +1,5 @@
 import { formatPrice } from "./number-policy.js?v=20261018-display-v1";
+import { hoverCardPosition } from "./chart-hover.js?v=20261019-crosshair-v1";
 import { REVIEW_URL, renderMethodReview } from "./method-review.js?v=20261018-display-v1";
 import { createDataLoader } from "./data-loader.js?v=20261018-v1";
 import { jevStatusLabel, jevReviewView } from "./model-monitor.js?v=20261013-jev-review-v1";
@@ -832,6 +833,7 @@ function renderChart(data) {
   text('[data-chart-batch-heading]', batch.heading);
   text('[data-chart-batch-description]', batch.description);
 
+  els.tooltip.hidden = true;
   els.chart.setAttribute("viewBox", `0 0 ${width} ${height}`);
   els.chart.innerHTML = `
     <defs>
@@ -902,18 +904,29 @@ function renderChart(data) {
     }
   `;
 
+  const guide = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  guide.setAttribute('class', 'hover-date-guide');
+  guide.setAttribute('data-hover-guide', '');
+  guide.setAttribute('aria-hidden', 'true');
+  guide.setAttribute('y1', pad.top);
+  guide.setAttribute('y2', height - pad.bottom);
+  guide.style.display = 'none';
+  els.chart.append(guide);
   wireTooltip(series, { width, height, pad, xMin, xMax, x, y }, batch);
 }
 
 function wireTooltip(series, scale, batch) {
   const wrap = els.chart.parentElement;
   const { pad, xMin, xMax } = scale;
+  const guide = els.chart.querySelector('[data-hover-guide]');
+  const hide = () => { els.tooltip.hidden = true; guide.style.display = 'none'; };
 
   wrap.onmousemove = (event) => {
     const rect = els.chart.getBoundingClientRect();
     const localX = ((event.clientX - rect.left) / rect.width) * scale.width;
-    if (localX < pad.left || localX > scale.width - pad.right) {
-      els.tooltip.hidden = true;
+    if (!series.length || localX < pad.left || localX > scale.width - pad.right
+        || event.clientY < rect.top || event.clientY > rect.bottom) {
+      hide();
       return;
     }
     const time = xMin + ((localX - pad.left) / (scale.width - pad.left - pad.right)) * (xMax - xMin);
@@ -921,6 +934,11 @@ function wireTooltip(series, scale, batch) {
       const current = Math.abs(point.time - time);
       return current < best.distance ? { point, distance: current } : best;
     }, { point: series[0], distance: Infinity }).point;
+    const guideX = scale.x(nearest.time);
+    guide.setAttribute('x1', guideX);
+    guide.setAttribute('x2', guideX);
+    guide.setAttribute('data-date', nearest.date);
+    guide.style.display = '';
 
     els.tooltip.innerHTML = `
       <strong>${nearest.date}</strong>
@@ -933,13 +951,20 @@ function wireTooltip(series, scale, batch) {
         ? `${batch.temporaryAnchor ? 'h=0 临时倒数起点（非正向实际价）' : batch.actualAnchor ? '本期 h=0 实际价锚点' : '批次连接点'} ${formatNumber(nearest.forecast)}（不计误差）` : ''}
     `;
     els.tooltip.hidden = false;
-    els.tooltip.style.left = `${Math.min(event.clientX - rect.left + 16, rect.width - 180)}px`;
-    els.tooltip.style.top = `${Math.max(event.clientY - rect.top - 28, 8)}px`;
+    const wrapRect = wrap.getBoundingClientRect();
+    els.tooltip.style.maxWidth = `${Math.max(120, Math.min(260, rect.width - 16))}px`;
+    const position = hoverCardPosition({
+      pointerX: event.clientX - wrapRect.left, pointerY: event.clientY - wrapRect.top,
+      guideX: rect.left - wrapRect.left + guideX * rect.width / scale.width,
+      left: rect.left - wrapRect.left, top: rect.top - wrapRect.top,
+      width: rect.width, height: rect.height,
+      cardWidth: els.tooltip.offsetWidth, cardHeight: els.tooltip.offsetHeight,
+    });
+    els.tooltip.style.left = `${position.left}px`;
+    els.tooltip.style.top = `${position.top}px`;
   };
 
-  wrap.onmouseleave = () => {
-    els.tooltip.hidden = true;
-  };
+  wrap.onmouseleave = hide;
 }
 
 function renderTable(data) {
@@ -2629,6 +2654,8 @@ function bindUi() {
 
   const hideChartTooltip = (event) => {
     els.tooltip.hidden = true;
+    const guide = els.chart.querySelector('[data-hover-guide]');
+    if (guide) guide.style.display = 'none';
     event.stopPropagation();
   };
 
