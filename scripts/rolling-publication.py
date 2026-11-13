@@ -113,6 +113,27 @@ def consumer_document(batch, item, symbol, observations=()):
     return doc
 
 
+def refresh_terrain(document, symbol, market, central, converter, staging):
+    import tempfile
+    from terrain_filter import compute_terrain_features, load_ohlc
+    latest = document["dailyActuals"]["latest"]
+    features = compute_terrain_features(load_ohlc(market / f"{symbol}.xlsx", end_date=latest["date"]))
+    with tempfile.TemporaryDirectory() as folder:
+        temporary = Path(folder)
+        features.to_csv(temporary / f"{symbol}_terrain_features.csv", index=False)
+        previous = converter.TERRAIN_FEATURE_DIR
+        try:
+            converter.TERRAIN_FEATURE_DIR = temporary
+            series = converter.read_terrain_series(symbol)
+        finally:
+            converter.TERRAIN_FEATURE_DIR = previous
+    if not series or series[-1]["date"] != latest["date"] or series[-1]["close"] != converter.fmt(latest["close"]):
+        raise ValueError(f"{symbol}: GMMA cutoff or close differs from daily actuals")
+    (staging / f"terrain/{symbol}.json").write_bytes(json.dumps({
+        "symbol": symbol, "centralMarket": central, "series": series,
+    }, allow_nan=False, separators=(",", ":")).encode())
+
+
 def compose(root, staging, converter):
     root, staging = Path(root), Path(staging)
     source = root / "public/data"
@@ -165,14 +186,40 @@ def compose(root, staging, converter):
         if set(batch["pairs"]) != set(symbols):
             raise ValueError("Rolling batch instrument coverage differs from dashboard")
         batches[frequency] = batch
+    weekly = batches.get("weekly")
+    if weekly and weekly["runId"] != "20261107T040358_ea0493d9":
+        run_id = weekly["runId"]
+        alignment = read(rolling / "aligned_weekly" / f"{run_id}.json")
+        official_sha = hashlib.sha256((rolling / "vintages" / f"{run_id}.json").read_bytes()).hexdigest()
+        if (alignment.get("schema") != "fx-aligned-weekly-comparison/v1"
+                or alignment.get("status") != "PASS"
+                or alignment.get("vintageSha256") != official_sha
+                or alignment.get("centralMarket") != weekly["inputFreeze"]["centralMarket"]
+                or set(alignment["pairs"]) != set(symbols)):
+            raise ValueError("Weekly reference is missing its accepted ten-pair comparison")
+        for symbol, entry in alignment["pairs"].items():
+            item = weekly["pairs"][symbol]
+            official = item["path"][:14]
+            if (entry["origin"] != weekly["scheduledOrigin"] or entry["v012RunId"] != run_id
+                    or entry.get("referenceInput") != item["data"].get("referenceInput")
+                    or set(entry["series"]) != {"V0.1.0", "V0.1.1"}):
+                raise ValueError(f"{symbol}: comparison provenance mismatch")
+            for series in entry["series"].values():
+                if (len(series) != 14 or [point["date"] for point in series] != [point["target"] for point in official]
+                        or any(not math.isfinite(point["forecast"]) or point["forecast"] <= 0 for point in series)
+                        or abs(series[0]["forecast"] - official[0]["forecast"]) > 1e-10):
+                    raise ValueError(f"{symbol}: invalid accepted comparison path")
+        (staging / "aligned-weekly.json").write_bytes(encode(alignment))
     import sys
     sys.path.insert(0, str(project))
-    from central_market import verify_batch
-    from terrain_filter import compute_terrain_features, load_ohlc
-    import tempfile
-    central = read(project / "data/central_market/current.json")["pointer"]
-    market = project / "data/central_market/versions" / central["data_version"]
-    verify_batch(market, central["manifest_sha256"])
+    central_path = project / "data/central_market/current.json"
+    central = read(central_path)["pointer"] if central_path.exists() else None
+    if central is None and (project / "central_market_config.json").exists():
+        raise ValueError("Missing verified central market pointer")
+    if central:
+        from central_market import verify_batch
+        market = project / "data/central_market/versions" / central["data_version"]
+        verify_batch(market, central["manifest_sha256"])
     actuals_as_of = datetime.now(timezone.utc)
     for symbol_item in manifest["symbols"]:
         symbol = symbol_item["symbol"]
@@ -180,24 +227,10 @@ def compose(root, staging, converter):
         if document.get("localPreview"):
             raise ValueError("A local preview cannot be published")
         document["dailyActuals"] = converter.read_daily_actuals(symbol, issued_at=actuals_as_of)
-        latest = document["dailyActuals"]["latest"]
-        features = compute_terrain_features(load_ohlc(market / f"{symbol}.xlsx", end_date=latest["date"]))
-        with tempfile.TemporaryDirectory() as folder:
-            temporary = Path(folder)
-            features.to_csv(temporary / f"{symbol}_terrain_features.csv", index=False)
-            previous = converter.TERRAIN_FEATURE_DIR
-            try:
-                converter.TERRAIN_FEATURE_DIR = temporary
-                series = converter.read_terrain_series(symbol)
-            finally:
-                converter.TERRAIN_FEATURE_DIR = previous
-        if not series or series[-1]["date"] != latest["date"] or series[-1]["close"] != converter.fmt(latest["close"]):
-            raise ValueError(f"{symbol}: GMMA cutoff or close differs from daily actuals")
-        (staging / f"terrain/{symbol}.json").write_bytes(json.dumps({
-            "symbol": symbol, "centralMarket": central, "series": series,
-        }, allow_nan=False, separators=(",", ":")).encode())
-        if read(project / "data/central_market/current.json")["pointer"] != central:
-            raise ValueError("Central market pointer changed during GMMA generation")
+        if central:
+            refresh_terrain(document, symbol, market, central, converter, staging)
+            if read(central_path)["pointer"] != central:
+                raise ValueError("Central market pointer changed during GMMA generation")
         document["cadenceStatus"] = status
         document.setdefault("rollingReference", {})
         for frequency, batch in batches.items():

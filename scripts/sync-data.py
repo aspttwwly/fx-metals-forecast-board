@@ -92,6 +92,7 @@ def convert(root, staging):
     if os.getenv('FX_ROLLING_WORKFLOW') == '1':
         reference = module.FORECAST_PROJECT_DIR / 'prophet output/rolling_reference'
         paths = list(reference.glob('*.json')) + list((reference / 'vintages').glob('*.json'))
+        paths += list((reference / 'aligned_weekly').glob('*.json'))
         paths += list((root / 'public/data').rglob('*.json'))
         frozen = {path: hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
         spec = importlib.util.spec_from_file_location('rolling_publication', root / 'scripts/rolling-publication.py')
@@ -99,6 +100,7 @@ def convert(root, staging):
         spec.loader.exec_module(rolling)
         rolling.compose(root, staging, module)
         after_paths = list(reference.glob('*.json')) + list((reference / 'vintages').glob('*.json'))
+        after_paths += list((reference / 'aligned_weekly').glob('*.json'))
         after_paths += list((root / 'public/data').rglob('*.json'))
         if (set(after_paths) != set(frozen) or source_hashes(module) != before
                 or any(hashlib.sha256(path.read_bytes()).hexdigest() != value for path, value in frozen.items())):

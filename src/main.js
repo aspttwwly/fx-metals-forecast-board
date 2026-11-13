@@ -2432,6 +2432,11 @@ function renderSelectedForecast() {
       selected.deviation = path[1].forecast - anchor.forecast;
       selected.direction = selected.deviation > 0 ? '上行' : selected.deviation < 0 ? '下行' : '持平';
       selected.forecastScope = 'ALIGNED_WEEKLY_COMPARISON';
+      selected.referenceInput = aligned.referenceInput || null;
+      if (selected.referenceInput) {
+        selected.latestActual.valueRole = 'DERIVED_REFERENCE_ANCHOR';
+        points.get(anchor.date).actual = null;
+      }
       selected.modelVersion = state.version;
       selected.policyVersion = aligned.policy[state.version];
       selected.sourceUpdatedAt = aligned.generatedAt[state.version];
