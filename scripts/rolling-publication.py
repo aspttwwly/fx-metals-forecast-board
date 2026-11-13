@@ -165,6 +165,14 @@ def compose(root, staging, converter):
         if set(batch["pairs"]) != set(symbols):
             raise ValueError("Rolling batch instrument coverage differs from dashboard")
         batches[frequency] = batch
+    import sys
+    sys.path.insert(0, str(project))
+    from central_market import verify_batch
+    from terrain_filter import compute_terrain_features, load_ohlc
+    import tempfile
+    central = read(project / "data/central_market/current.json")["pointer"]
+    market = project / "data/central_market/versions" / central["data_version"]
+    verify_batch(market, central["manifest_sha256"])
     actuals_as_of = datetime.now(timezone.utc)
     for symbol_item in manifest["symbols"]:
         symbol = symbol_item["symbol"]
@@ -172,6 +180,24 @@ def compose(root, staging, converter):
         if document.get("localPreview"):
             raise ValueError("A local preview cannot be published")
         document["dailyActuals"] = converter.read_daily_actuals(symbol, issued_at=actuals_as_of)
+        latest = document["dailyActuals"]["latest"]
+        features = compute_terrain_features(load_ohlc(market / f"{symbol}.xlsx", end_date=latest["date"]))
+        with tempfile.TemporaryDirectory() as folder:
+            temporary = Path(folder)
+            features.to_csv(temporary / f"{symbol}_terrain_features.csv", index=False)
+            previous = converter.TERRAIN_FEATURE_DIR
+            try:
+                converter.TERRAIN_FEATURE_DIR = temporary
+                series = converter.read_terrain_series(symbol)
+            finally:
+                converter.TERRAIN_FEATURE_DIR = previous
+        if not series or series[-1]["date"] != latest["date"] or series[-1]["close"] != converter.fmt(latest["close"]):
+            raise ValueError(f"{symbol}: GMMA cutoff or close differs from daily actuals")
+        (staging / f"terrain/{symbol}.json").write_bytes(json.dumps({
+            "symbol": symbol, "centralMarket": central, "series": series,
+        }, allow_nan=False, separators=(",", ":")).encode())
+        if read(project / "data/central_market/current.json")["pointer"] != central:
+            raise ValueError("Central market pointer changed during GMMA generation")
         document["cadenceStatus"] = status
         document.setdefault("rollingReference", {})
         for frequency, batch in batches.items():

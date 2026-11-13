@@ -227,6 +227,11 @@ function calculateSeriesQuality(series, limit = 52) {
 }
 
 function calculateForecastQuality(data) {
+  if (data.forecastScope === 'ROLLING_REFERENCE_AS_ISSUED') {
+    const h4 = data.qualityByHorizon?.find(row=>row.horizon===4) || {};
+    return {samples:h4.sampleCount || 0, mae:h4.mae ?? null, mape:h4.mape ?? null,
+      rmse:h4.rmse ?? null, coverage:null};
+  }
   if (data.forecastScope === "CURRENT_DECISION_CHAIN_AS_ISSUED") {
     const horizons = data.forecastEvidence?.current?.horizons || [];
     const h4 = horizons.find((row) => row.horizonWeeks === 4) || {};
@@ -1589,10 +1594,11 @@ function renderTerrainChart(data) {
   const layerTop = 510;
   const layerBottom = 594;
   const anchor = history[history.length - 1];
-  const future = futureSeries(data).map((point) => ({ ...point, time: parseDate(point.date).getTime() }));
-  const futurePlot = [{ date: anchor.date, time: anchor.time, forecast: anchor.close, lower: anchor.close, upper: anchor.close }, ...future];
+  const weekly = currentWeeklyView(data);
+  const futurePlot = weekly.series.filter(point => isFiniteNumber(point.forecast))
+    .map(point => ({...point, time:parseDate(point.date).getTime()}));
   const showFuture = state.terrainZoomEnd === 100 && futurePlot.length > 1 && mode === "price";
-  const endTime = showFuture ? futurePlot[futurePlot.length - 1].time : anchor.time;
+  const endTime = showFuture ? Math.max(anchor.time, futurePlot.at(-1).time) : anchor.time;
   const startTime = history[0].time;
   const plotRight = width - right;
   const x = (time) => left + ((time - startTime) / Math.max(endTime - startTime, 1)) * (plotRight - left);
@@ -1662,7 +1668,7 @@ function renderTerrainChart(data) {
   }
 
   const emaDeviationLines = "";
-  const futureBand = showFuture ? terrainRibbon(futurePlot, x, y, (point) => point.lower, (point) => point.upper) : "";
+  const futureBand = showFuture && futurePlot.every(p=>isFiniteNumber(p.lower)&&isFiniteNumber(p.upper)) ? terrainRibbon(futurePlot, x, y, (point) => point.lower, (point) => point.upper) : "";
   const futureLine = showFuture ? terrainPath(futurePlot, x, y, (point) => point.forecast) : "";
 
   els.terrainChart.innerHTML = `
@@ -1730,10 +1736,15 @@ function renderTerrainChart(data) {
 
 function renderTerrainPage(data) {
   if (!data || !els.terrainView) return;
-  const terrainData = data.terrain;
-  const trade = data.tradeSignal;
+  const latest = data.terrainSeries?.at(-1);
+  const terrainData = latest && {state:latest.trend>0?'UP':latest.trend<0?'DOWN':'NEUTRAL',
+    gate:latest.gate, coherence:latest.coherence, energyAtr:latest.energyAtr,
+    trendScore:latest.score, regimeAge:latest.regimeAge};
+  const trade = null;
   terrainPage("symbol", data.symbol);
-  terrainPage("subtitle", `${data.name} · 日频 GMMA 历史 / 周频未来预测`);
+  const last = data.terrainSeries?.at(-1);
+  const weekly = data.rollingReference?.weekly;
+  terrainPage("subtitle", `${data.name} · GMMA 截至 ${last?.date || '--'} · V0.1.2 周频起点 ${weekly?.latestActual?.date || '--'}`);
   terrainPage("state", terrainStateLabel(terrainData?.state));
   terrainPage("action", terrainActionLabel(trade?.action));
   terrainPage("direction", `${tradeDirectionLabel(trade?.rawDirection)} → ${tradeDirectionLabel(trade?.direction)}`);
@@ -1754,6 +1765,17 @@ function renderTerrainPage(data) {
   renderTerrainSymbols();
   updateTerrainZoomControl(data);
   renderTerrainChart(data);
+}
+
+function currentWeeklyView(data) {
+  const batch = data.rollingReference?.weekly;
+  if (!batch) throw new Error('缺少正式周频参考批次');
+  const observed = new Map(data.series.filter(p=>p.date<batch.latestActual.date && isFiniteNumber(p.actual))
+    .map(p=>[p.date,{date:p.date,actual:p.actual,forecast:null,future:false}]));
+  for (const point of batch.issuedActuals || []) observed.set(point.date, {...point, forecast:null});
+  return {...data, ...batch, forecastScope:'ROLLING_REFERENCE_AS_ISSUED',
+    series:[...observed.values()].sort((a,b)=>a.date.localeCompare(b.date))
+      .concat(batch.series.map(p=>({...p,evaluationEligible:false})))};
 }
 
 function futureSeries(data) {
@@ -2028,7 +2050,7 @@ function renderAtlasFocus(snapshot, snapshots) {
 function renderAtlasControls(currentDate) {
   atlas("horizon", `WEEK ${String(state.atlasWeek + 1).padStart(2, "0")}`);
   atlas("date", currentDate || "--");
-  atlas("updated", state.manifest.updatedAt.slice(0, 10).replaceAll("-", "."));
+  atlas("updated", (state.atlasData.get(state.symbol)?.issuedAt || "").slice(0,10));
   const yawDegrees = Math.round((state.atlasCamera.yaw * 180) / Math.PI);
   const pitchDegrees = Math.round((state.atlasCamera.pitch * 180) / Math.PI);
   atlas("camera", `YAW ${yawDegrees}° / PITCH ${pitchDegrees}° / ${state.atlasCamera.zoom.toFixed(1)}×`);
@@ -2181,7 +2203,7 @@ function renderAtlas() {
 
 async function ensureAtlasData() {
   if (state.atlasData.size === allSymbols().length) return;
-  const records = await Promise.all(allSymbols().map(async (symbol) => [symbol, await fetchJson(`/data/${symbol}.json`)]));
+  const records = await Promise.all(allSymbols().map(async (symbol) => [symbol, currentWeeklyView(await fetchJson(`/data/${symbol}.json`))]));
   state.atlasData = new Map(records);
   state.atlasBaselines = new Map(records.map(([symbol, data]) => [symbol, buildAtlasBaseline(data)]));
   const maxWeeks = Math.max(...records.map(([, data]) => futureSeries(data).length), 1);
