@@ -1786,13 +1786,19 @@ function atlasPoint(data, weekIndex) {
   const future = futureSeries(data);
   const point = future[Math.min(weekIndex, Math.max(0, future.length - 1))];
   if (!point) return null;
-  const metrics = calculateForecastQuality(data);
+  const quality = data.qualityByHorizon?.find(row=>row.horizon===point.horizon);
+  const metrics = {samples:quality?.sampleCount || 0,mape:quality?.mape ?? null};
   const baseline = state.atlasBaselines.get(data.symbol) || buildAtlasBaseline(data);
   const move = ((point.forecast / data.latestActual.value) - 1) * 100;
-  const uncertainty = uncertaintyPercent(point) ?? 0;
-  const confidence = clamp(qualityScore(metrics) - weekIndex * 2.2 - uncertainty * 1.2, 8, 96);
-  const qualityPercentile = percentileRank(baseline.qualityHistory, confidence);
-  const uncertaintyPercentile = percentileRank(baseline.uncertaintyHistory, uncertainty);
+  const uncertainty = baseline.realizedVolatility * Math.sqrt(point.horizon);
+  const confidence = metrics.samples ? qualityScore(metrics) : null;
+  const peerQuality = [...state.atlasData.values()].map(peer=> {
+    const row = peer.qualityByHorizon?.find(row=>row.horizon===point.horizon);
+    return row?.sampleCount && Number.isFinite(row.mape) ? -row.mape : null;
+  });
+  const peerVolatility = [...state.atlasBaselines.values()].map(peer=>peer.realizedVolatility);
+  const qualityPercentile = percentileRank(peerQuality, confidence === null ? null : -metrics.mape);
+  const uncertaintyPercentile = percentileRank(peerVolatility, baseline.realizedVolatility);
   const xSignal = move / baseline.realizedVolatility;
   const ySignal = (qualityPercentile - 0.5) * 2;
   const zSignal = (uncertaintyPercentile - 0.5) * 2;
@@ -2033,14 +2039,14 @@ function renderAtlasFocus(snapshot, snapshots) {
   atlas("actual", formatNumber(data.latestActual.value));
   atlas("forecast", formatNumber(point.forecast));
   atlas("move", `${move > 0 ? "+" : ""}${formatPercent(move, 2)}`);
-  atlas("confidence", `${Math.round(confidence)} / 100`);
+  atlas("confidence", confidence === null ? "暂无成熟样本" : `${Math.round(confidence)} / 100 · ${snapshot.metrics.samples} 个样本`);
   atlas("uncertainty", formatPercent(snapshot.uncertainty, 2));
   atlas("range", `${lower} — ${upper}`);
   const yRelative = snapshot.ySignal * 50;
   const zRelative = snapshot.zSignal * 50;
   atlas("coordinate", `X ${snapshot.xSignal > 0 ? "+" : ""}${snapshot.xSignal.toFixed(2)}σ / Y ${yRelative >= 0 ? "+" : ""}${yRelative.toFixed(0)} / Z ${zRelative >= 0 ? "+" : ""}${zRelative.toFixed(0)}`);
   atlas("date", point.date);
-  atlas("note", `${point.date} 的模型路径指向${direction}，标准化方向强度为 ${snapshot.xSignal > 0 ? "+" : ""}${snapshot.xSignal.toFixed(2)}σ。Y ${yRelative >= 0 ? "+" : ""}${yRelative.toFixed(0)} 表示可靠性相对常态，Z ${zRelative >= 0 ? "+" : ""}${zRelative.toFixed(0)} 表示不确定性相对常态。`);
+  atlas("note", `${point.date} 的模型路径指向${direction}，标准化方向强度为 ${snapshot.xSignal > 0 ? "+" : ""}${snapshot.xSignal.toFixed(2)}σ。Y ${yRelative >= 0 ? "+" : ""}${yRelative.toFixed(0)} 表示同期限已兑现预测误差的横截面排名（无样本时居中），Z ${zRelative >= 0 ? "+" : ""}${zRelative.toFixed(0)} 表示历史周波动的横截面排名。波动按期限平方根缩放，仅供空间对照。`);
 
   const focus = document.querySelector(".atlas-focus");
   focus?.classList.toggle("is-up", move >= 0);
@@ -2179,7 +2185,7 @@ function renderAtlas() {
     return `
       <button class="atlas-node${active}${direction}" type="button" data-symbol="${snapshot.data.symbol}"
         style="--atlas-x:${(position.x / 10).toFixed(2)}%;--atlas-y:${(position.y / 6.2).toFixed(2)}%;--atlas-size:${size.toFixed(1)}px;--atlas-glow:${glow.toFixed(1)}px;--atlas-depth-scale:${depthScale.toFixed(3)};--atlas-depth-opacity:${depthOpacity.toFixed(3)}"
-        aria-label="${snapshot.data.name}，预期变化 ${formatPercent(snapshot.move, 2)}，相对质量分 ${Math.round(snapshot.confidence)}，参考带宽度 ${formatPercent(snapshot.uncertainty, 2)}">
+        aria-label="${snapshot.data.name}，预期变化 ${formatPercent(snapshot.move, 2)}，相对质量分 ${snapshot.confidence === null ? "暂无成熟样本" : Math.round(snapshot.confidence)}，历史波动参考 ${formatPercent(snapshot.uncertainty, 2)}">
         <span class="atlas-node-core"></span>
         <strong>${snapshot.data.symbol}</strong>
         <small>${snapshot.move > 0 ? "+" : ""}${formatPercent(snapshot.move, 2)}</small>
