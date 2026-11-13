@@ -1,12 +1,12 @@
 import { formatPrice } from "./number-policy.js?v=20261018-display-v1";
 import { hoverCardPosition } from "./chart-hover.js?v=20261019-crosshair-v1";
 import { REVIEW_URL, renderMethodReview } from "./method-review.js?v=20261018-display-v1";
-import { createDataLoader } from "./data-loader.js?v=20261018-v1";
+import { createDataLoader } from "./data-loader.js?v=20261113-aligned-weekly";
 import { jevStatusLabel, jevReviewView } from "./model-monitor.js?v=20261013-jev-review-v1";
 import { renderReplayEvidence } from "./replay-evidence.js?v=20261015-fixed-origin-v2";
 import { FREQUENCIES, validateHorizon, forecastCsv } from "./forecast-frequency.js?v=20261015-versions-v1";
 import { VERSION_NOTES, versionedView, comparisonCsv, recentComparison } from "./forecast-versions.js?v=20261017-daily-display-v1";
-import { forecastBatchPresentation, forecastBoundaryLayout } from "./forecast-batches.js?v=20261018-reference-anchor-v1";
+import { forecastBatchPresentation, forecastBoundaryLayout } from "./forecast-batches.js?v=20261113-aligned-weekly";
 import { dailyObservation, observedDisplaySeries, dailyActualsCsv } from "./daily-actuals.js?v=20261017-daily-display-v1";
 
 const manifestUrl = "/data/manifest.json";
@@ -996,6 +996,7 @@ function renderSummary(data) {
   const actual = `${displayedActual.date} / ${formatNumber(displayedActual.value)}`;
   const forecast = `${data.nextForecast.date} / ${formatNumber(data.nextForecast.value)}`;
   const updated = formatDate.format(parseDate(data.sourceUpdatedAt.slice(0, 10)));
+  text('[data-meta="actual-cutoff"]', observation.latest?.date || '暂无');
   const generated = formatDate.format(parseDate(data.generatedAt));
   const directionCard = document.querySelector("[data-direction-card]");
 
@@ -2340,7 +2341,16 @@ function renderSelectedForecast() {
   if (!state.data) return;
   if (state.version==='V0.1.2') state.evidenceMode='issued';
   const error = document.querySelector("[data-frequency-error]");
-  const spec = {...FREQUENCIES[state.frequency],...(state.version==='V0.1.0'?{max:13}:{})};
+  const control = document.querySelector('[data-aligned-weekly]');
+  const aligned = state.alignedWeekly?.pairs?.[state.symbol];
+  const official = state.data.rollingReference?.weekly;
+  const eligible = state.frequency === 'weekly' && state.version !== 'V0.1.2'
+    && aligned?.v012RunId === official?.runId && aligned?.origin === official?.latestActual?.date
+    && aligned?.series?.[state.version]?.length === 14;
+  control.closest('label').hidden = !eligible;
+  const useAligned = eligible && control.checked;
+  if (useAligned) state.horizon = Math.min(state.horizon, 13);
+  const spec = {...FREQUENCIES[state.frequency],...((useAligned || state.version==='V0.1.0')?{max:13}:{})};
   document.body.dataset.forecastFrequency = state.frequency;
   document.body.dataset.forecastVersion = state.version;
   document.body.dataset.evidenceMode = state.evidenceMode;
@@ -2367,6 +2377,38 @@ function renderSelectedForecast() {
   try {
     state.displayData = { ...versionedView(state.data,state.legacyData,state.version,state.frequency,state.horizon,state.evidenceMode,state.historyHorizon),
       dailyActuals: state.data.dailyActuals, localPreview: state.data.localPreview };
+    if (useAligned) {
+      const selected = state.displayData;
+      const path = aligned.series[state.version].slice(0, state.horizon + 1);
+      const anchor = path[0];
+      if (anchor.date !== aligned.origin || Math.abs(anchor.forecast - official.latestActual.value) > 1e-10
+          || path.some((row, index) => row.date !== official.series[index]?.date
+            || !Number.isFinite(row.forecast) || row.forecast <= 0)) {
+        throw new Error('同起点对照批次的日期或价格校验失败');
+      }
+      const points = new Map(selected.series.map(row => [row.date, {...row,
+        forecast:null, future:false, lower:null, upper:null}]));
+      path.forEach((row, index) => points.set(row.date, {...points.get(row.date), ...row,
+        date:row.date, actual:index === 0 ? anchor.forecast : points.get(row.date)?.actual ?? null,
+        horizon:index, lower:null, upper:null, future:index > 0}));
+      selected.series = [...points.values()].sort((a,b)=>a.date.localeCompare(b.date));
+      selected.latestActual = {date:anchor.date, value:anchor.forecast};
+      selected.nextForecast = {date:path[1].date, value:path[1].forecast};
+      selected.selectedEnd = {date:path.at(-1).date, value:path.at(-1).forecast};
+      selected.deviation = path[1].forecast - anchor.forecast;
+      selected.direction = selected.deviation > 0 ? '上行' : selected.deviation < 0 ? '下行' : '持平';
+      selected.forecastScope = 'ALIGNED_WEEKLY_COMPARISON';
+      selected.modelVersion = state.version;
+      selected.policyVersion = aligned.policy[state.version];
+      selected.sourceUpdatedAt = aligned.generatedAt[state.version];
+      selected.generatedAt = selected.sourceUpdatedAt.slice(0,10);
+      selected.trainEnd = anchor.date;
+      selected.displaySourceCutoff = anchor.date;
+      selected.researchNote = '同起点周频对照，仅供参考。取消勾选可查看原版本的留存预测。';
+      selected.comparisonNote = '蓝线为同起点周频对照。历史虚线沿用所选版本与对照来源。';
+      selected.modelMonitor = null; selected.modelAdmission = null; selected.parameterLifecycle = null;
+      selected.terrain = null; selected.tradeSignal = null; selected.files = {};
+    }
     document.body.dataset.forecastUnavailable = "false";
     error.hidden = true;
     const selected = state.displayData;
@@ -2495,6 +2537,7 @@ async function loadSymbol(symbol, options = {}) {
 }
 
 function bindUi() {
+  document.querySelector('[data-aligned-weekly]').addEventListener('change',renderSelectedForecast);
   document.querySelector('[data-version]').addEventListener('change',event=>{
     state.version=event.target.value;
     if(state.version==='V0.1.0') {state.frequency='weekly';state.horizon=13;state.historyHorizon=13;state.evidenceMode='issued';}
@@ -2604,7 +2647,7 @@ function bindUi() {
   // Container height also changes when the sidebar's details are expanded.
   const chartResizeObserver = new ResizeObserver(() => {
     if (!state.data || state.view !== "observatory" || !els.chart.clientWidth) return;
-    renderChart(state.data);
+    if (state.displayData) renderChart(state.displayData);
     state.qualityOffset = clampQualityOffset(state.qualityOffset.x, state.qualityOffset.y);
     applyQualityPanelOffset();
   });
@@ -2617,7 +2660,7 @@ function bindUi() {
     await setView(routeView, { updateRoute: false });
   });
   window.addEventListener("resize", () => {
-    if (state.data) renderChart(state.data);
+    if (state.displayData) renderChart(state.displayData);
     if (state.view === "constellation" && state.atlasData.size) renderAtlas();
     if (state.view === "terrain" && state.data) renderTerrainChart(state.data);
     state.qualityOffset = clampQualityOffset(state.qualityOffset.x, state.qualityOffset.y);
@@ -2641,7 +2684,7 @@ function bindUi() {
       state.zoomEnd = Math.min(100, state.zoomStart + minSpan);
     }
 
-    renderChart(state.data);
+    if (state.displayData) renderChart(state.displayData);
   };
 
   els.zoomStart.addEventListener("input", () => setZoom("start"));
@@ -2649,7 +2692,7 @@ function bindUi() {
   els.zoomReset.addEventListener("click", () => {
     state.zoomStart = 0;
     state.zoomEnd = 100;
-    renderChart(state.data);
+    if (state.displayData) renderChart(state.displayData);
   });
 
   const hideChartTooltip = (event) => {
@@ -2671,6 +2714,7 @@ async function init() {
     startRequestAudit();
   }
   state.manifest = await fetchJson(manifestUrl);
+  state.alignedWeekly = await fetchJson('/data/aligned-weekly.json').catch(()=>null);
   state.view = currentRouteView(false);
   state.atlasMode = currentAtlasMode();
   renderInstrumentRail();

@@ -3,8 +3,9 @@ export function forecastBatchPresentation(data) {
   const unit = data.frequencyKey === 'monthly' ? '个月' : '周';
   const horizon = data.selectedHorizon;
   const historyHorizon = data.comparisonHorizon ?? horizon;
-  const legacy = data.appVersion === 'V0.1.0';
-  const mixedHistory = legacy && data.evidenceMode === 'legacy';
+  const aligned = data.forecastScope === 'ALIGNED_WEEKLY_COMPARISON';
+  const legacy = data.appVersion === 'V0.1.0' && !aligned;
+  const mixedHistory = data.appVersion === 'V0.1.0' && data.evidenceMode === 'legacy';
   const research = data.forecastScope === 'WALKFORWARD_RESEARCH_CURRENT';
   const origin = data.latestActual.date;
   const anchor = data.series.find(point => point.date === origin);
@@ -19,7 +20,7 @@ export function forecastBatchPresentation(data) {
   const historySource = data.evidenceMode === 'backtest'
     ? (legacy ? '旧版回补' : '历史回测') : (mixedHistory ? '原版历史' : '历史发布');
   const historyLabel = `${historySource} · ${mixedHistory ? '混合期限' : `h${historyHorizon}`}`;
-  const futureLabel = legacy ? '原版未来留存' : research ? '本期研究预测' : data.referenceInput ? '本期临时参考预测' : '本期发布预测';
+  const futureLabel = aligned ? '同起点对照预测' : legacy ? '原版未来留存' : research ? '本期研究预测' : data.referenceInput ? '本期临时参考预测' : '本期发布预测';
   const historyDescription = mixedHistory
     ? '历史虚线保留原版混合期限预测，不作为固定期限评分。'
     : `历史虚线：各历史起点的第 ${historyHorizon} ${unit}预测（固定 h=${historyHorizon}），不是同一批路径。`;

@@ -26,11 +26,13 @@
         <p class="eyebrow">/ FORECAST OBSERVATORY</p>
         <h1 id="page-title">汇率与贵金属<br /><span>预测观察</span></h1>
         <div class="masthead-meta">
-          <span>最新更新时间 <strong data-meta="updated">--</strong></span>
+          <span>日行情截至 <strong data-meta="actual-cutoff">--</strong></span>
+          <span>预测批次日期 <strong data-meta="updated">--</strong></span>
           <span>数据周期 <strong data-meta="frequency">周频</strong></span>
           <span>发布形态 <strong>静态 JSON</strong></span>
           <span>访问量 <strong class="visit-counter" data-visit-count>--</strong></span>
         </div>
+        <label data-aligned-control hidden><input type="checkbox" data-aligned-weekly checked> 同起点 13 周对照</label>
         <form class="forecast-controls" data-frequency-form>
           <label for="forecast-version">模型版本
             <select id="forecast-version" data-version><option value="V0.1.2" selected>V0.1.2</option><option value="V0.1.1">V0.1.1</option><option value="V0.1.0">V0.1.0</option></select>
@@ -608,6 +610,6 @@
       </form>
     </dialog>
 
-    <script type="module" src="/src/main.js?v=20261019-crosshair-v1"></script>
+    <script type="module" src="/src/main.js?v=20261113-aligned-weekly"></script>
   </body>
 </html>

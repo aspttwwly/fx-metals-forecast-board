@@ -5,7 +5,7 @@ import { join } from 'node:path';
 // Build metadata only: original data bytes and consumer API contracts stay unchanged.
 export async function writeBrowserDataIndex(dist) {
   const manifest = JSON.parse(await readFile(join(dist, 'data/manifest.json'), 'utf8'));
-  const paths = ['/data/manifest.json'];
+  const paths = ['/data/manifest.json', '/data/aligned-weekly.json'];
   for (const { symbol } of manifest.symbols) {
     if (!/^[A-Z0-9]{3,12}$/.test(symbol)) throw new Error('Invalid public symbol');
     paths.push(`/data/${symbol}.json`, `/data/versions/v0.1.0/${symbol}.json`);
