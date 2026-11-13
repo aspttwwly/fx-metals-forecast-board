@@ -1942,21 +1942,27 @@ function buildTimeTunnel(data) {
   const reference = data.latestActual.value;
   const toReturn = (value) => isFiniteNumber(value) ? ((value / reference) - 1) * 100 : null;
 
+  const horizonOne = new Map((data.issuedComparisons || [])
+    .filter(row => row.horizon === 1 && isFiniteNumber(row.forecast) && isFiniteNumber(row.actual))
+    .map(row => [row.target, row]));
   const historyRecords = historical.map((point, index) => ({
+    comparison: horizonOne.get(point.date),
     point,
     step: index - historical.length + 1,
     actualReturn: toReturn(point.actual),
-    forecastReturn: toReturn(point.forecast),
-    error: isFiniteNumber(point.forecast) && point.actual ? ((point.forecast / point.actual) - 1) * 100 : null,
+    forecastReturn: toReturn(horizonOne.get(point.date)?.forecast),
+    error: horizonOne.has(point.date)
+      ? ((horizonOne.get(point.date).forecast / horizonOne.get(point.date).actual) - 1) * 100 : null,
   }));
-  const futureRecords = future.map((point, index) => ({
-    point,
-    step: index + 1,
-    forecastReturn: toReturn(point.forecast),
-    lowerReturn: toReturn(point.lower),
-    upperReturn: toReturn(point.upper),
-    uncertainty: uncertaintyPercent(point) ?? 0,
-  }));
+  const baseline = state.atlasBaselines.get(data.symbol) || buildAtlasBaseline(data);
+  const futureRecords = future.map((point, index) => {
+    const uncertainty = baseline.realizedVolatility * Math.sqrt(point.horizon);
+    return {
+      point, step: index + 1, forecastReturn: toReturn(point.forecast), uncertainty,
+      lowerReturn: toReturn(point.forecast * (1 - uncertainty / 100)),
+      upperReturn: toReturn(point.forecast * (1 + uncertainty / 100)),
+    };
+  });
   const yValues = historyRecords.flatMap((item) => [item.actualReturn, item.forecastReturn])
     .concat(futureRecords.flatMap((item) => [item.forecastReturn, item.lowerReturn, item.upperReturn]))
     .filter(Number.isFinite);
@@ -2134,11 +2140,11 @@ function renderTimeTunnel(snapshots, selected) {
   const historicalErrors = tunnel.historyRecords.map((item) => Math.abs(item.error)).filter(Number.isFinite);
   atlas("up-count", String(tunnel.historyRecords.length));
   atlas("down-count", String(tunnel.futureRecords.length));
-  atlas("avg-move", formatPercent(mean(historicalErrors) || 0, 2));
+  atlas("avg-move", historicalErrors.length ? formatPercent(mean(historicalErrors), 2) : "--");
   text('[data-atlas-stat="one"]', "历史周数");
   text('[data-atlas-stat="two"]', "未来周数");
   text('[data-atlas-stat="three"]', "历史平均绝对误差");
-  text('[data-atlas-stat="note"]', "白线为历史实际，金线为历史预测；连接线表示已实现误差，未来半透明空间表示未经覆盖率校准的参考带。");
+  text('[data-atlas-stat="note"]', "白线为历史实际，金线为已兑现的一周预测，连接线表示误差。蓝色或红色中心线为正式周频预测，半透明空间为按期限平方根缩放的历史周波动参考。");
   renderAtlasControls(selected.point.date);
 }
 
